@@ -1,0 +1,24 @@
+[package]
+name = "mpDris2-rs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1"
+thiserror = "1"
+async-std = { version = "1", features = ["attributes", "unstable"] }
+# Commuicating with D-Bus
+zbus = "2"
+zvariant = "3"
+serde = "1"
+# Parsing MPD protocol
+nom = "7"
+# Logging
+log = "0.4"
+fern = { version = "0.6", features = ["colored"] }
+# Signal processing
+signal-hook = "0.3"
+signal-hook-async-std = "0.2"
+
+[profile.release]
+lto = true
