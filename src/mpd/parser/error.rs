@@ -88,7 +88,7 @@ fn parse_error_line_helper(i: &str) -> IResult<&str, (&str, &str, &str, &str)> {
 
     // The rest of the line is the error message
     let (i, msg) = take_till(|c| c == '\n')(i)?;
-    let (i, _) = tag("\n")(i)?;
+    let (_, _) = tag("\n")(i)?;
 
     Ok(("", (error_id, msg, command_list_no, current_command)))
 }

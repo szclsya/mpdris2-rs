@@ -1,8 +1,4 @@
-use super::{
-    types,
-    types::{MpdState, MpdStateChanged},
-    MpdClient,
-};
+use super::{types, types::MpdState, MpdClient};
 ///
 use crate::interfaces::MprisStateChange;
 
@@ -125,7 +121,7 @@ async fn idle(
             match field.as_str() {
                 "stored_playlist" => (),
                 "playlist" => (),
-                "player" | "mixer" | "options" => update_status(c, &state, &tx).await?,
+                "player" | "mixer" | "options" => update_status(c, state, tx).await?,
                 _ => (),
             }
         }
@@ -168,6 +164,8 @@ async fn update_status(
             }
         }
         tx.send(MprisStateChange::Song).await?;
+    } else {
+        new.album_art = old.album_art.clone();
     }
     if new.next_song != old.next_song {
         tx.send(MprisStateChange::NextSong).await?;
@@ -213,7 +211,7 @@ pub async fn update_album_art(c: &mut MpdClient) -> Result<PathBuf> {
             .ok_or_else(|| format_err!("bad mpd response: no size"))?[0];
         let binary_size = &fields.get("binary").unwrap()[0];
         pic_file.write_all(&resp.binary.unwrap()).await?;
-        if &size != &binary_size {
+        if size != binary_size {
             offset += binary_size.parse::<u64>()?;
             loop {
                 // Read the remaining parts
@@ -246,7 +244,7 @@ pub async fn update_album_art(c: &mut MpdClient) -> Result<PathBuf> {
                 .ok_or_else(|| format_err!("bad mpd response: no size"))?[0];
             let binary_size = &fields.get("binary").unwrap()[0];
             pic_file.write_all(&resp.binary.unwrap()).await?;
-            if &size != &binary_size {
+            if size != binary_size {
                 offset += binary_size.parse::<u64>()?;
                 loop {
                     // Read the remaining parts

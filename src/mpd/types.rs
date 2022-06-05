@@ -45,6 +45,7 @@ impl From<&str> for MpdStateChanged {
     }
 }
 
+#[derive(Debug)]
 pub struct MpdState {
     pub playback_state: MpdPlaybackState,
     pub loop_state: MpdLoopState,
@@ -140,7 +141,7 @@ impl MpdState {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum MpdPlaybackState {
     Playing(MpdPlayingState),
     Paused(MpdPlayingState),
@@ -159,13 +160,13 @@ impl Display for MpdPlaybackState {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct MpdPlayingState {
     pub elapsed: Duration,
     pub duration: Duration,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum MpdLoopState {
     None,
     Track,

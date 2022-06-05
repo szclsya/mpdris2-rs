@@ -1,9 +1,9 @@
 use anyhow::Result;
 use log::error;
 use std::{collections::HashMap, time::Duration};
-use zvariant::{ Value, ObjectPath };
+use zvariant::{ObjectPath, Value};
 
-pub fn id_to_object_path<'a>(id: u64) -> ObjectPath<'a> {
+pub fn id_to_object_path<'a>(id: impl std::fmt::Display) -> ObjectPath<'a> {
     let path = format!("/org/musicpd/song/{id}");
     ObjectPath::try_from(path).unwrap()
 }
@@ -25,8 +25,7 @@ pub fn to_mpris_metadata<'a>(
     let i = &mut i;
     let r = &mut res;
     if let Some(id) = i.remove("Id") {
-        let id = id[0].parse()?;
-        let object_id = id_to_object_path(id);
+        let object_id = id_to_object_path(&id[0]);
         r.insert("mpris:trackid".to_string(), Value::new(object_id));
     }
     if let Some(length) = i.remove("duration") {

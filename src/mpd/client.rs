@@ -7,8 +7,8 @@ use async_std::{
     net::TcpStream,
     prelude::*,
 };
+use log::{debug, error, info};
 use std::time::Duration;
-use log::{debug, info, error};
 
 pub struct MpdClient {
     reader: BufReader<TcpStream>,
@@ -55,12 +55,12 @@ impl MpdClient {
                 Ok(_) => {
                     info!("Reconnect success.");
                     break;
-                },
+                }
                 Err(e) => {
                     error!("Reconnect failed: {}", e);
                     error!("Will reattempt in 5s...");
                     async_std::task::sleep(Duration::from_secs(5)).await;
-                },
+                }
             }
         }
     }

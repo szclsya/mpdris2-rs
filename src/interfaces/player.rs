@@ -1,8 +1,6 @@
 use super::{types::MprisStateChange, utils::*};
 /// Player interface (org.mpris.MediaPlayer2.Player) implementation
-use crate::{
-    mpd::{types::*, MpdStateServer},
-};
+use crate::mpd::{types::*, MpdStateServer};
 
 use anyhow::Result;
 use async_std::{
@@ -31,28 +29,47 @@ impl PlayerInterface {
 #[dbus_interface(name = "org.mpris.MediaPlayer2.Player")]
 impl PlayerInterface {
     #[dbus_interface(name = "Play")]
-    async fn play(&self) {
-        self.mpdclient.lock().await.issue_command("play").await.ok();
+    async fn play(&self, #[zbus(signal_context)] ctxt: SignalContext<'_>) {
+        let mut client = self.mpdclient.lock().await;
+        match client.issue_command("play").await {
+            Ok(_) => {
+                PlayerInterface::playback_status_changed(self, &ctxt)
+                    .await
+                    .ok();
+                client.update_status().await.ok();
+            }
+            Err(e) => {
+                error!("org.mpris.MediaPlayer2.Player.Play failed: {e}");
+            }
+        }
     }
 
     #[dbus_interface(name = "Pause")]
-    async fn pause(&self) {
-        self.mpdclient
-            .lock()
-            .await
-            .issue_command("pause 1")
-            .await
-            .ok();
+    async fn pause(&self, #[zbus(signal_context)] ctxt: SignalContext<'_>) {
+        match self.mpdclient.lock().await.issue_command("pause 1").await {
+            Ok(_) => {
+                PlayerInterface::playback_status_changed(self, &ctxt)
+                    .await
+                    .ok();
+            }
+            Err(e) => {
+                error!("org.mpris.MediaPlayer2.Player.Pause failed: {e}");
+            }
+        }
     }
 
     #[dbus_interface(name = "PlayPause")]
-    async fn play_pause(&self) {
-        self.mpdclient
-            .lock()
-            .await
-            .issue_command("pause")
-            .await
-            .ok();
+    async fn play_pause(&self, #[zbus(signal_context)] ctxt: SignalContext<'_>) {
+        match self.mpdclient.lock().await.issue_command("pause").await {
+            Ok(_) => {
+                PlayerInterface::playback_status_changed(self, &ctxt)
+                    .await
+                    .ok();
+            }
+            Err(e) => {
+                error!("org.mpris.MediaPlayer2.Player.Play failed: {e}");
+            }
+        }
     }
 
     #[dbus_interface(name = "Next")]
@@ -61,13 +78,25 @@ impl PlayerInterface {
     }
 
     #[dbus_interface(name = "Previous")]
-    async fn previous(&self) {
-        self.mpdclient
-            .lock()
-            .await
-            .issue_command("previous")
-            .await
-            .ok();
+    async fn previous(&self, #[zbus(signal_context)] ctxt: SignalContext<'_>) {
+        let state = self.mpd_state.read().await;
+        let mut cmd = "previous";
+        if let MpdPlaybackState::Playing(state) = &state.playback_state {
+            if state.elapsed.as_secs_f32() > 3.0 {
+                cmd = "seekcur 0";
+            }
+        }
+
+        match self.mpdclient.lock().await.issue_command(cmd).await {
+            Ok(_) => {
+                if cmd == "seekcur 0" {
+                    PlayerInterface::seeked(&ctxt, 0).await.ok();
+                }
+            }
+            Err(e) => {
+                error!("org.mpris.MediaPlayer2.Player.Previous failed: {e}")
+            }
+        }
     }
 
     #[dbus_interface(name = "Stop")]
@@ -77,12 +106,11 @@ impl PlayerInterface {
 
     #[dbus_interface(name = "Seek")]
     async fn seek(&self, #[zbus(signal_context)] ctxt: SignalContext<'_>, ms: i64) {
-        debug!("Seeking for {ms}");
         let symbol = if ms > 0 { '+' } else { '-' };
         let t = Duration::from_micros(ms.abs() as u64);
         let cmd = format!("seekcur {symbol}{}", t.as_secs());
         if let Err(e) = self.mpdclient.lock().await.issue_command(&cmd).await {
-            error!("org.mpris.MediaPlayer2.Player failed: {}", e);
+            error!("org.mpris.MediaPlayer2.Player.Seek failed: {}", e);
         } else {
             PlayerInterface::seeked(&ctxt, ms).await.ok();
         }
@@ -104,7 +132,7 @@ impl PlayerInterface {
             let pos = Duration::from_micros(position as u64);
             let cmd = format!("seekcur {}", pos.as_secs());
             if let Err(e) = self.mpdclient.lock().await.issue_command(&cmd).await {
-                error!("org.mpris.MediaPlayer2.Player failed: {}", e);
+                error!("org.mpris.MediaPlayer2.Player.SetPosition failed: {}", e);
             } else {
                 PlayerInterface::seeked(&ctxt, position).await.ok();
             }
@@ -232,7 +260,7 @@ impl PlayerInterface {
     #[dbus_interface(property, name = "CanGoNext")]
     async fn can_go_next(&self) -> bool {
         let status = self.mpd_state.read().await;
-        status.next_song.is_some()
+        status.next_song.is_some() || status.loop_state == MpdLoopState::Playlist
     }
 
     #[dbus_interface(property, name = "CanGoPrevious")]
@@ -276,14 +304,17 @@ pub async fn notify_changed(c: Connection, rx: Receiver<MprisStateChange>) -> Re
         if let Ok(s) = signal {
             match s {
                 Playback => iface.playback_status_changed(ctxt).await?,
-                Loop => iface.loop_status_changed(ctxt).await?,
+                Loop => {
+                    iface.loop_status_changed(ctxt).await?;
+                    iface.can_go_next_changed(ctxt).await?;
+                }
                 Shuffle => iface.shuffle_changed(ctxt).await?,
                 Volume => iface.volume_changed(ctxt).await?,
                 Song => {
                     iface.metadata_changed(ctxt).await?;
                     iface.playback_status_changed(ctxt).await?;
                     iface.can_go_next_changed(ctxt).await?;
-                },
+                }
                 _ => (),
             }
         }

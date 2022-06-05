@@ -6,20 +6,20 @@ const OBJECT_PATH: &str = "/org/mpris/MediaPlayer2";
 
 use anyhow::Result;
 use async_std::{
+    prelude::*,
     sync::{Arc, Mutex},
     task,
-    prelude::*
 };
-use zbus::{ ConnectionBuilder, export::futures_util::SinkExt };
 use fern::colors::{Color, ColoredLevelConfig};
+use log::info;
 use signal_hook::consts::signal::*;
 use signal_hook_async_std::Signals;
-use log::info;
+use zbus::{export::futures_util::SinkExt, ConnectionBuilder};
 
 #[async_std::main]
 async fn main() -> Result<()> {
     setup_logger()?;
-    
+
     try_main().await?;
     Ok(())
 }
@@ -29,14 +29,15 @@ async fn try_main() -> Result<()> {
 
     let mpris_event_rx = mpd_state_server.get_mpris_event_rx();
     let mpd_state_server = Arc::new(Mutex::new(mpd_state_server));
-    let root_interface = interfaces::root::RootInterface::default();
-    let player_interface =
-        interfaces::player::PlayerInterface::new(mpd_state_server.clone()).await;
+    let root_interface = interfaces::RootInterface::default();
+    let player_interface = interfaces::PlayerInterface::new(mpd_state_server.clone()).await;
+    let tracklist_interface = interfaces::TracklistInterface::new(mpd_state_server.clone());
 
     let mut connection = ConnectionBuilder::session()?
         .name(BUS_NAME)?
         .serve_at(OBJECT_PATH, root_interface)?
         .serve_at(OBJECT_PATH, player_interface)?
+        .serve_at(OBJECT_PATH, tracklist_interface)?
         .build()
         .await?;
 
@@ -58,7 +59,7 @@ async fn try_main() -> Result<()> {
         connection.close().await?;
         handle.close();
     }
-    
+
     Ok(())
 }
 

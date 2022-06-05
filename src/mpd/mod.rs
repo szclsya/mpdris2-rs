@@ -7,5 +7,5 @@ pub mod types;
 mod client;
 pub use client::MpdClient;
 
-mod statecache;
-pub use statecache::MpdStateServer;
+mod stateserver;
+pub use stateserver::MpdStateServer;

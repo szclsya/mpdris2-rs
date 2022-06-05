@@ -4,9 +4,7 @@ pub use error::*;
 use anyhow::{bail, Result};
 use nom::{
     bytes::complete::{tag, take_till, take_while},
-    character::complete::one_of,
-    combinator::eof,
-    AsChar, Err, IResult, InputTakeAtPosition,
+    AsChar, Err, IResult,
 };
 
 pub fn parse_line(i: &str) -> Result<(&str, &str)> {
