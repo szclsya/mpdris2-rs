@@ -131,8 +131,7 @@ impl MpdState {
             song,
             next_song,
             playlistlength: playlistlength
-                .map(|s| s[0].parse().ok())
-                .flatten()
+                .and_then(|s| s[0].parse().ok())
                 .unwrap_or(0),
             album_art: None,
         };

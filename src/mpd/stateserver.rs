@@ -120,7 +120,7 @@ async fn idle(
         if name == "changed" {
             match field.as_str() {
                 "stored_playlist" => (),
-                "playlist" => (),
+                "playlist" => tx.send(MprisStateChange::Tracklist).await?,
                 "player" | "mixer" | "options" => update_status(c, state, tx).await?,
                 _ => (),
             }

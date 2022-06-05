@@ -5,4 +5,5 @@ pub enum MprisStateChange {
     Volume,
     Song,
     NextSong,
+    Tracklist,
 }

@@ -43,10 +43,19 @@ async fn try_main() -> Result<()> {
 
     // Register state change updater
     let c2 = connection.clone();
+    let rx2 = mpris_event_rx.clone();
     task::spawn(async move {
-        interfaces::player::notify_changed(c2, mpris_event_rx.clone())
-            .await
-            .ok()
+        interfaces::player::notify_changes(c2, rx2).await.ok();
+    });
+    let c3 = connection.clone();
+    task::spawn(async move {
+        interfaces::tracklist::notify_changes(
+            c3,
+            mpd_state_server.clone(),
+            mpris_event_rx.clone(),
+        )
+        .await
+        .ok();
     });
 
     // Now everything is set-up, wait for an exit signal

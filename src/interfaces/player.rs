@@ -290,30 +290,36 @@ impl PlayerInterface {
     }
 }
 
-pub async fn notify_changed(c: Connection, rx: Receiver<MprisStateChange>) -> Result<()> {
+pub async fn notify_changes(c: Connection, rx: Receiver<MprisStateChange>) -> Result<()> {
     use MprisStateChange::*;
     let iface_ref = c
         .object_server()
         .interface::<_, PlayerInterface>(crate::OBJECT_PATH)
         .await?;
     loop {
-        debug!("Waiting for MPD state change from interface...");
+        debug!("Waiting for MPD state change from org.mpris2.MediaPlayer2.Player...");
         let signal = rx.recv().await;
         let iface = iface_ref.get_mut().await;
         let ctxt = iface_ref.signal_context();
         if let Ok(s) = signal {
             match s {
-                Playback => iface.playback_status_changed(ctxt).await?,
-                Loop => {
-                    iface.loop_status_changed(ctxt).await?;
-                    iface.can_go_next_changed(ctxt).await?;
+                Playback => {
+                    iface.playback_status_changed(ctxt).await.ok();
                 }
-                Shuffle => iface.shuffle_changed(ctxt).await?,
-                Volume => iface.volume_changed(ctxt).await?,
+                Loop => {
+                    iface.loop_status_changed(ctxt).await.ok();
+                    iface.can_go_next_changed(ctxt).await.ok();
+                }
+                Shuffle => {
+                    iface.shuffle_changed(ctxt).await.ok();
+                }
+                Volume => {
+                    iface.volume_changed(ctxt).await.ok();
+                }
                 Song => {
-                    iface.metadata_changed(ctxt).await?;
-                    iface.playback_status_changed(ctxt).await?;
-                    iface.can_go_next_changed(ctxt).await?;
+                    iface.metadata_changed(ctxt).await.ok();
+                    iface.playback_status_changed(ctxt).await.ok();
+                    iface.can_go_next_changed(ctxt).await.ok();
                 }
                 _ => (),
             }
