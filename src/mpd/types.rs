@@ -130,9 +130,7 @@ impl MpdState {
             volume: volume.parse()?,
             song,
             next_song,
-            playlistlength: playlistlength
-                .and_then(|s| s[0].parse().ok())
-                .unwrap_or(0),
+            playlistlength: playlistlength.and_then(|s| s[0].parse().ok()).unwrap_or(0),
             album_art: None,
         };
 

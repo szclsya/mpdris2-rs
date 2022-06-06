@@ -1,7 +1,7 @@
 /// A simple MPD client implementation
 use super::{parse_error_line, parse_line, types::MpdResponse};
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use async_std::{
     io::{BufReader, BufWriter},
     net::TcpStream,
@@ -21,7 +21,9 @@ pub struct MpdClient {
 
 impl MpdClient {
     pub async fn new(ip: &str, port: usize) -> Result<Self> {
-        let stream = TcpStream::connect(format!("{}:{}", ip, port)).await?;
+        let stream = TcpStream::connect(format!("{}:{}", ip, port))
+            .await
+            .context(format!("Cannot connect to MPD server at {ip}:{port}"))?;
         let mut reader = BufReader::new(stream.clone());
         let writer = BufWriter::new(stream);
 

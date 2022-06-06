@@ -1,7 +1,7 @@
 mod interfaces;
 mod mpd;
 
-const BUS_NAME: &str = "org.mpris.MediaPlayer2.mpd2";
+const BUS_NAME: &str = "org.mpris.MediaPlayer2.mpd";
 const OBJECT_PATH: &str = "/org/mpris/MediaPlayer2";
 
 use anyhow::Result;
@@ -10,17 +10,24 @@ use async_std::{
     sync::{Arc, Mutex},
     task,
 };
+use colored::Colorize;
 use fern::colors::{Color, ColoredLevelConfig};
 use log::info;
 use signal_hook::consts::signal::*;
 use signal_hook_async_std::Signals;
 use zbus::{export::futures_util::SinkExt, ConnectionBuilder};
 
-#[async_std::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     setup_logger()?;
 
-    try_main().await?;
+    std::env::set_var("ASYNC_STD_THREAD_COUNT", "1");
+    if let Err(err) = async_std::task::block_on(try_main()) {
+        println!("{:>6} {err}", "ERROR".red());
+        err.chain().skip(1).for_each(|cause| {
+            println!("{} {}", "DUE TO".yellow(), cause);
+        });
+    }
+
     Ok(())
 }
 
@@ -81,7 +88,7 @@ fn setup_logger() -> Result<()> {
     fern::Dispatch::new()
         .format(move |out, message, record| {
             out.finish(format_args!(
-                "{} [{}] {}",
+                "{:>5} [{}] {}",
                 colors.color(record.level()),
                 record.target(),
                 message

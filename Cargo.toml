@@ -16,6 +16,7 @@ serde = "1"
 nom = "7"
 # Logging
 log = "0.4"
+colored = "2"
 fern = { version = "0.6", features = ["colored"] }
 # Signal processing
 signal-hook = "0.3"
