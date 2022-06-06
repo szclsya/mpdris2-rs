@@ -45,7 +45,7 @@ impl From<&str> for MpdStateChanged {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MpdState {
     pub playback_state: MpdPlaybackState,
     pub loop_state: MpdLoopState,
@@ -56,11 +56,15 @@ pub struct MpdState {
     pub next_song: Option<(u64, u64)>,
     pub playlistlength: u64,
 
+    pub current_song: Option<HashMap<String, Vec<String>>>,
     pub album_art: Option<PathBuf>,
 }
 
 impl MpdState {
-    pub fn from(mut status: HashMap<String, Vec<String>>) -> Result<Self> {
+    pub fn from(
+        mut status: HashMap<String, Vec<String>>,
+        metadata: Option<HashMap<String, Vec<String>>>,
+    ) -> Result<Self> {
         let mut missing_fields = Vec::new();
 
         let playlistlength = status.remove("playlistlength");
@@ -131,6 +135,7 @@ impl MpdState {
             song,
             next_song,
             playlistlength: playlistlength.and_then(|s| s[0].parse().ok()).unwrap_or(0),
+            current_song: metadata,
             album_art: None,
         };
 
@@ -138,7 +143,7 @@ impl MpdState {
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum MpdPlaybackState {
     Playing(MpdPlayingState),
     Paused(MpdPlayingState),
@@ -157,13 +162,13 @@ impl Display for MpdPlaybackState {
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct MpdPlayingState {
     pub elapsed: Duration,
     pub duration: Duration,
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum MpdLoopState {
     None,
     Track,

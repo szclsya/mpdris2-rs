@@ -103,7 +103,7 @@ impl PlayerInterface {
     #[dbus_interface(name = "Seek")]
     async fn seek(&self, #[zbus(signal_context)] ctxt: SignalContext<'_>, ms: i64) {
         let symbol = if ms > 0 { '+' } else { '-' };
-        let t = Duration::from_micros(ms.abs() as u64);
+        let t = Duration::from_micros(ms.unsigned_abs());
         let cmd = format!("seekcur {symbol}{}", t.as_secs());
         if let Err(e) = self.mpdclient.lock().await.issue_command(&cmd).await {
             error!("org.mpris.MediaPlayer2.Player.Seek failed: {}", e);
@@ -186,14 +186,9 @@ impl PlayerInterface {
 
     #[dbus_interface(property, name = "Metadata")]
     async fn metadata(&self) -> HashMap<String, Value<'_>> {
-        let mut res = if let Ok(res) = self
-            .mpdclient
-            .lock()
-            .await
-            .issue_command("currentsong")
-            .await
-        {
-            match to_mpris_metadata(res.field_map()) {
+        let state = self.mpd_state.read().await;
+        let mut res = if let Some(metadata) = state.current_song.clone() {
+            match to_mpris_metadata(metadata) {
                 Ok(res) => res,
                 Err(e) => {
                     error!("org.mpris.MediaPlayer2.Player.Metadata failed: {}", e);

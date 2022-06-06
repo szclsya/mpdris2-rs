@@ -1,5 +1,7 @@
 mod interfaces;
 mod mpd;
+mod notification;
+use notification::NotificationRelay;
 
 const BUS_NAME: &str = "org.mpris.MediaPlayer2.mpd";
 const OBJECT_PATH: &str = "/org/mpris/MediaPlayer2";
@@ -15,6 +17,7 @@ use fern::colors::{Color, ColoredLevelConfig};
 use log::{error, info};
 use signal_hook::consts::signal::*;
 use signal_hook_async_std::Signals;
+use std::time::Duration;
 use zbus::{export::futures_util::SinkExt, ConnectionBuilder};
 
 fn main() -> Result<()> {
@@ -34,7 +37,6 @@ fn main() -> Result<()> {
 async fn try_main() -> Result<()> {
     let mpd_state_server = mpd::MpdStateServer::init("127.0.0.1", 6600).await?;
 
-    let mpris_event_rx = mpd_state_server.get_mpris_event_rx();
     let mpd_state_server = Arc::new(Mutex::new(mpd_state_server));
     let root_interface = interfaces::RootInterface::default();
     let player_interface = interfaces::PlayerInterface::new(mpd_state_server.clone()).await;
@@ -51,12 +53,22 @@ async fn try_main() -> Result<()> {
     // Register state change updater
     let c2 = connection.clone();
     let client2 = mpd_state_server.clone();
-    let rx2 = mpris_event_rx.clone();
+    let mut rx2 = mpd_state_server.lock().await.get_mpris_event_rx();
     task::spawn(async move {
         loop {
-            if let Err(e) = interfaces::notify_loop(c2.clone(), rx2.clone(), client2.clone()).await
-            {
-                error!("Interface property change notifier dead, restarting: {e}");
+            if let Err(e) = interfaces::notify_loop(&c2, &mut rx2, &client2).await {
+                error!("D-Bus property change notifier dead, restarting. Reason: {e}");
+            }
+        }
+    });
+
+    // Set up notification relay
+    let mut notification = NotificationRelay::new(&connection, mpd_state_server.clone()).await?;
+    task::spawn(async move {
+        loop {
+            if let Err(e) = notification.send_notification_on_event().await {
+                error!("NotificationRelay dead, restarting. Reason: {e}");
+                task::sleep(Duration::from_secs(5)).await;
             }
         }
     });

@@ -3,8 +3,8 @@ use super::{types, types::MpdState, MpdClient};
 use crate::interfaces::MprisStateChange;
 
 use anyhow::{bail, format_err, Result};
+use async_broadcast::{broadcast, InactiveReceiver, Receiver, Sender};
 use async_std::{
-    channel::{bounded, Receiver, Sender},
     fs,
     fs::File,
     io::{BufWriter, WriteExt},
@@ -22,7 +22,7 @@ pub struct MpdStateServer {
     query_client: Arc<Mutex<MpdClient>>,
 
     mpris_event_tx: Sender<MprisStateChange>,
-    mpris_event_rx: Receiver<MprisStateChange>,
+    _mpris_event_rx: InactiveReceiver<MprisStateChange>,
 
     // State caches
     state: Arc<RwLock<types::MpdState>>,
@@ -34,7 +34,7 @@ impl MpdStateServer {
         let mut query_client = MpdClient::new(address, port).await?;
 
         let initial_state = query_client.issue_command("status").await?;
-        let mut initial_state = MpdState::from(initial_state.field_map())?;
+        let mut initial_state = MpdState::from(initial_state.field_map(), None)?;
         if let Ok(album_art_path) = update_album_art(&mut query_client).await {
             initial_state.album_art = Some(album_art_path);
         }
@@ -56,7 +56,8 @@ impl MpdStateServer {
         });
 
         // Create a client that receive MPD state change
-        let (mpris_event_tx, mpris_event_rx) = bounded(10);
+        let (mpris_event_tx, mpris_event_rx) = broadcast(50);
+        let mpris_event_rx = mpris_event_rx.deactivate();
         let mut idle_client = MpdClient::new(address, port).await?;
         let s2 = state.clone();
         let tx = mpris_event_tx.clone();
@@ -73,14 +74,14 @@ impl MpdStateServer {
         let res = MpdStateServer {
             query_client,
             mpris_event_tx,
-            mpris_event_rx,
+            _mpris_event_rx: mpris_event_rx,
             state,
         };
         Ok(res)
     }
 
     pub fn get_mpris_event_rx(&self) -> Receiver<MprisStateChange> {
-        self.mpris_event_rx.clone()
+        self.mpris_event_tx.new_receiver()
     }
 
     pub fn get_status(&self) -> Arc<RwLock<MpdState>> {
@@ -120,7 +121,9 @@ async fn idle(
         if name == "changed" {
             match field.as_str() {
                 "stored_playlist" => (),
-                "playlist" => tx.send(MprisStateChange::Tracklist).await?,
+                "playlist" => {
+                    tx.broadcast(MprisStateChange::Tracklist).await?;
+                }
                 "player" | "mixer" | "options" => update_status(c, state, tx).await?,
                 _ => (),
             }
@@ -136,18 +139,23 @@ async fn update_status(
     tx: &Sender<MprisStateChange>,
 ) -> Result<()> {
     let new_status = c.issue_command("status").await?;
-    let mut new = MpdState::from(new_status.field_map())?;
+    let mut new = if new_status.fields.iter().any(|(name, _)| name == "song") {
+        let metadata = c.issue_command("currentsong").await?.field_map();
+        MpdState::from(new_status.field_map(), Some(metadata))?
+    } else {
+        MpdState::from(new_status.field_map(), None)?
+    };
     let old = state.read().await;
 
     // Send notification
     if discriminant(&new.playback_state) != discriminant(&old.playback_state) {
-        tx.send(MprisStateChange::Playback).await?;
+        tx.broadcast(MprisStateChange::Playback).await?;
     }
     if new.loop_state != old.loop_state {
-        tx.send(MprisStateChange::Loop).await?;
+        tx.broadcast(MprisStateChange::Loop).await?;
     }
     if new.random != old.random {
-        tx.send(MprisStateChange::Shuffle).await?;
+        tx.broadcast(MprisStateChange::Shuffle).await?;
     }
     if new.song != old.song {
         match update_album_art(c).await {
@@ -163,18 +171,18 @@ async fn update_status(
                 error!("Failed to update album art: {}", e);
             }
         }
-        tx.send(MprisStateChange::Song).await?;
+        tx.broadcast(MprisStateChange::Song).await?;
     } else {
         new.album_art = old.album_art.clone();
     }
     if new.next_song != old.next_song {
-        tx.send(MprisStateChange::NextSong).await?;
+        tx.broadcast(MprisStateChange::NextSong).await?;
     }
     if new.volume != old.volume {
-        tx.send(MprisStateChange::Volume).await?;
+        tx.broadcast(MprisStateChange::Volume).await?;
     }
-
     drop(old);
+
     *state.write().await = new;
     Ok(())
 }

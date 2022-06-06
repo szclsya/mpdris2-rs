@@ -19,12 +19,12 @@ impl TracklistInterface {
 }
 
 #[dbus_interface(name = "org.mpris.MediaPlayer2.TrackList")]
-impl TracklistInterface {
+impl<'a> TracklistInterface {
     #[dbus_interface(name = "GetTracksMetadata")]
     async fn get_track_metadata(
         &self,
         tracks: Vec<ObjectPath<'_>>,
-    ) -> zbus::fdo::Result<Vec<HashMap<String, Value<'_>>>> {
+    ) -> zbus::fdo::Result<Vec<HashMap<String, Value<'a>>>> {
         let ids: Vec<Value<'_>> = tracks.into_iter().map(Value::new).collect();
 
         let metadatas = get_current_playlist(self.mpdclient.clone()).await?;

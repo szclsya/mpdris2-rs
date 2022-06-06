@@ -2,18 +2,16 @@ use super::{MprisStateChange, PlayerInterface, TracklistInterface};
 use crate::mpd::MpdStateServer;
 
 use anyhow::Result;
-use async_std::{
-    channel::Receiver,
-    sync::{Arc, Mutex},
-};
+use async_broadcast::Receiver;
+use async_std::sync::{Arc, Mutex};
 use log::debug;
 use zbus::Connection;
 use zvariant::ObjectPath;
 
 pub async fn notify_loop(
-    c: Connection,
-    rx: Receiver<MprisStateChange>,
-    client: Arc<Mutex<MpdStateServer>>,
+    c: &Connection,
+    rx: &mut Receiver<MprisStateChange>,
+    client: &Arc<Mutex<MpdStateServer>>,
 ) -> Result<()> {
     use MprisStateChange::*;
     let player_iface_ref = c
@@ -28,6 +26,7 @@ pub async fn notify_loop(
     loop {
         debug!("Waiting for MPD state change from org.mpris2.MediaPlayer2...");
         let signal = rx.recv().await;
+
         let player_iface = player_iface_ref.get_mut().await;
         let player_ctxt = player_iface_ref.signal_context();
         let tracklist_ctxt = tracklist_iface_ref.signal_context();
