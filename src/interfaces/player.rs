@@ -1,15 +1,11 @@
-use super::{types::MprisStateChange, utils::*};
+use super::utils::*;
 /// Player interface (org.mpris.MediaPlayer2.Player) implementation
 use crate::mpd::{types::*, MpdStateServer};
 
-use anyhow::Result;
-use async_std::{
-    channel::Receiver,
-    sync::{Arc, Mutex, RwLock},
-};
+use async_std::sync::{Arc, Mutex, RwLock};
 use log::{debug, error};
 use std::{collections::HashMap, time::Duration};
-use zbus::{dbus_interface, Connection, SignalContext};
+use zbus::{dbus_interface, SignalContext};
 use zvariant::{ObjectPath, Value};
 
 pub struct PlayerInterface {
@@ -287,42 +283,5 @@ impl PlayerInterface {
     #[dbus_interface(property, name = "CanControl")]
     async fn can_control(&self) -> bool {
         true
-    }
-}
-
-pub async fn notify_changes(c: Connection, rx: Receiver<MprisStateChange>) -> Result<()> {
-    use MprisStateChange::*;
-    let iface_ref = c
-        .object_server()
-        .interface::<_, PlayerInterface>(crate::OBJECT_PATH)
-        .await?;
-    loop {
-        debug!("Waiting for MPD state change from org.mpris2.MediaPlayer2.Player...");
-        let signal = rx.recv().await;
-        let iface = iface_ref.get_mut().await;
-        let ctxt = iface_ref.signal_context();
-        if let Ok(s) = signal {
-            match s {
-                Playback => {
-                    iface.playback_status_changed(ctxt).await.ok();
-                }
-                Loop => {
-                    iface.loop_status_changed(ctxt).await.ok();
-                    iface.can_go_next_changed(ctxt).await.ok();
-                }
-                Shuffle => {
-                    iface.shuffle_changed(ctxt).await.ok();
-                }
-                Volume => {
-                    iface.volume_changed(ctxt).await.ok();
-                }
-                Song => {
-                    iface.metadata_changed(ctxt).await.ok();
-                    iface.playback_status_changed(ctxt).await.ok();
-                    iface.can_go_next_changed(ctxt).await.ok();
-                }
-                _ => (),
-            }
-        }
     }
 }

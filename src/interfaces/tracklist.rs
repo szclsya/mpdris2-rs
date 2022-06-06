@@ -1,14 +1,11 @@
-use super::{types::MprisStateChange, utils::*};
+use super::utils::*;
 /// TrackList interface (org.mpris.MediaPlayer2.TrackList) implementation
 use crate::mpd::MpdStateServer;
 
-use async_std::{
-    channel::Receiver,
-    sync::{Arc, Mutex},
-};
-use log::{debug, error};
+use async_std::sync::{Arc, Mutex};
+use log::error;
 use std::collections::HashMap;
-use zbus::{dbus_interface, Connection, SignalContext};
+use zbus::{dbus_interface, SignalContext};
 use zvariant::{ObjectPath, Value};
 
 pub struct TracklistInterface {
@@ -84,7 +81,7 @@ impl TracklistInterface {
     }
 
     #[dbus_interface(signal, name = "TrackListReplaced")]
-    async fn track_list_replaced(
+    pub async fn track_list_replaced(
         ctxt: &SignalContext<'_>,
         tracks: Vec<ObjectPath<'_>>,
         current: ObjectPath<'_>,
@@ -135,7 +132,7 @@ impl TracklistInterface {
     }
 }
 
-async fn get_current_playlist<'a>(
+pub async fn get_current_playlist<'a>(
     client: Arc<Mutex<MpdStateServer>>,
 ) -> zbus::fdo::Result<Vec<HashMap<std::string::String, zvariant::Value<'a>>>> {
     let client = client.lock().await;
@@ -162,7 +159,7 @@ async fn get_current_playlist<'a>(
     Ok(metadatas)
 }
 
-fn extract_ids_from_metadata<'a>(
+pub fn extract_ids_from_metadata<'a>(
     i: &HashMap<String, Value<'_>>,
 ) -> zbus::fdo::Result<ObjectPath<'a>> {
     let path = i
@@ -179,44 +176,4 @@ fn extract_ids_from_metadata<'a>(
 
 fn to_fdo_err(e: anyhow::Error) -> zbus::fdo::Error {
     zbus::fdo::Error::Failed(e.to_string())
-}
-
-pub async fn notify_changes(
-    c: Connection,
-    client: Arc<Mutex<MpdStateServer>>,
-    rx: Receiver<MprisStateChange>,
-) -> anyhow::Result<()> {
-    use super::MprisStateChange::*;
-
-    let iface_ref = c
-        .object_server()
-        .interface::<_, TracklistInterface>(crate::OBJECT_PATH)
-        .await?;
-    loop {
-        debug!("Waiting for MPD state change from org.mpris2.MediaPlayer2.Tracklist...");
-        let signal = rx.recv().await;
-        let ctxt = iface_ref.signal_context();
-        if let Ok(Tracklist) = signal {
-            if let Ok(tracklist) = get_current_playlist(client.clone()).await {
-                let ids: Vec<ObjectPath<'_>> = tracklist
-                    .iter()
-                    .filter_map(|song| extract_ids_from_metadata(song).ok())
-                    .collect();
-
-                let current_object_path = if ids.is_empty() {
-                    ObjectPath::try_from("/org/mpris/MediaPlayer2/TrackList/NoTrack").unwrap()
-                } else {
-                    let client = client.lock().await;
-                    let state = client.get_status();
-                    let state = state.read().await;
-                    let current_pos = state.song.unwrap_or((0, 0)).0;
-                    ids.get(current_pos as usize).unwrap().clone()
-                };
-
-                TracklistInterface::track_list_replaced(ctxt, ids, current_object_path)
-                    .await
-                    .ok();
-            }
-        }
-    }
 }

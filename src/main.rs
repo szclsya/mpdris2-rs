@@ -12,7 +12,7 @@ use async_std::{
 };
 use colored::Colorize;
 use fern::colors::{Color, ColoredLevelConfig};
-use log::info;
+use log::{error, info};
 use signal_hook::consts::signal::*;
 use signal_hook_async_std::Signals;
 use zbus::{export::futures_util::SinkExt, ConnectionBuilder};
@@ -50,19 +50,15 @@ async fn try_main() -> Result<()> {
 
     // Register state change updater
     let c2 = connection.clone();
+    let client2 = mpd_state_server.clone();
     let rx2 = mpris_event_rx.clone();
     task::spawn(async move {
-        interfaces::player::notify_changes(c2, rx2).await.ok();
-    });
-    let c3 = connection.clone();
-    task::spawn(async move {
-        interfaces::tracklist::notify_changes(
-            c3,
-            mpd_state_server.clone(),
-            mpris_event_rx.clone(),
-        )
-        .await
-        .ok();
+        loop {
+            if let Err(e) = interfaces::notify_loop(c2.clone(), rx2.clone(), client2.clone()).await
+            {
+                error!("Interface property change notifier dead, restarting: {e}");
+            }
+        }
     });
 
     // Now everything is set-up, wait for an exit signal
