@@ -66,7 +66,8 @@ fn convert_str_array_tag(
     mpd_key: &str,
     mpris_key: &str,
 ) {
-    if let Some(value) = i.remove(mpd_key) {
+    if let Some(mut value) = i.remove(mpd_key) {
+        value.dedup();
         res.insert(mpris_key.to_owned(), Value::new(value));
     }
 }
