@@ -2,12 +2,15 @@ mod interfaces;
 mod mpd;
 mod notification;
 use notification::NotificationRelay;
+mod config;
+use config::Config;
 
 const BUS_NAME: &str = "org.mpris.MediaPlayer2.mpd";
 const OBJECT_PATH: &str = "/org/mpris/MediaPlayer2";
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use async_std::{
+    fs::File,
     prelude::*,
     sync::{Arc, Mutex},
     task,
@@ -17,13 +20,13 @@ use fern::colors::{Color, ColoredLevelConfig};
 use log::{error, info};
 use signal_hook::consts::signal::*;
 use signal_hook_async_std::Signals;
-use std::time::Duration;
+use std::{path::PathBuf, time::Duration};
 use zbus::{export::futures_util::SinkExt, ConnectionBuilder};
 
 fn main() -> Result<()> {
-    setup_logger()?;
-
+    // We don't really need multiple worker thread to pass some music info
     std::env::set_var("ASYNC_STD_THREAD_COUNT", "1");
+
     if let Err(err) = async_std::task::block_on(try_main()) {
         println!("{:>6} {err}", "ERROR".red());
         err.chain().skip(1).for_each(|cause| {
@@ -35,7 +38,24 @@ fn main() -> Result<()> {
 }
 
 async fn try_main() -> Result<()> {
-    let mpd_state_server = mpd::MpdStateServer::init("127.0.0.1", 6600).await?;
+    let args: Vec<String> = std::env::args().collect();
+    let config: Config = if args.len() >= 2 {
+        let config_path = PathBuf::from(&args[1]);
+        let mut config_file = File::open(&config_path)
+            .await
+            .context("Failed to open config file")?;
+        let mut config_content = String::new();
+        config_file
+            .read_to_string(&mut config_content)
+            .await
+            .context("Failed to read config file")?;
+        toml::from_str(&config_content).context("Failed to parse config file")?
+    } else {
+        Config::default()
+    };
+    setup_logger(config.debug)?;
+
+    let mpd_state_server = mpd::MpdStateServer::init(&config.host, config.port).await?;
 
     let mpd_state_server = Arc::new(Mutex::new(mpd_state_server));
     let root_interface = interfaces::RootInterface::default();
@@ -62,16 +82,19 @@ async fn try_main() -> Result<()> {
         }
     });
 
-    // Set up notification relay
-    let mut notification = NotificationRelay::new(&connection, mpd_state_server.clone()).await?;
-    task::spawn(async move {
-        loop {
-            if let Err(e) = notification.send_notification_on_event().await {
-                error!("NotificationRelay dead, restarting. Reason: {e}");
-                task::sleep(Duration::from_secs(5)).await;
+    // Set up notification relay, if requested
+    if config.notification {
+        let mut notification =
+            NotificationRelay::new(&connection, mpd_state_server.clone()).await?;
+        task::spawn(async move {
+            loop {
+                if let Err(e) = notification.send_notification_on_event().await {
+                    error!("NotificationRelay dead, restarting. Reason: {e}");
+                    task::sleep(Duration::from_secs(5)).await;
+                }
             }
-        }
-    });
+        });
+    }
 
     // Now everything is set-up, wait for an exit signal
     info!("Server started");
@@ -87,11 +110,13 @@ async fn try_main() -> Result<()> {
     Ok(())
 }
 
-fn setup_logger() -> Result<()> {
+fn setup_logger(debug: bool) -> Result<()> {
     let colors = ColoredLevelConfig::new()
         .error(Color::Red)
         .warn(Color::Yellow)
         .info(Color::Blue);
+
+    let level = if debug { log::LevelFilter::Debug } else { log::LevelFilter::Info };
 
     fern::Dispatch::new()
         .format(move |out, message, record| {
@@ -102,7 +127,7 @@ fn setup_logger() -> Result<()> {
                 message
             ))
         })
-        .level(log::LevelFilter::Debug)
+        .level(level)
         .chain(std::io::stdout())
         .apply()?;
     Ok(())
