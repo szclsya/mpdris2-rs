@@ -161,7 +161,7 @@ async fn update_status(
                 error!("Failed to update album art: {}", e);
             }
         }
-    } else {
+    } else if new.song.is_some() {
         new.album_art = old.album_art.clone();
     }
 
