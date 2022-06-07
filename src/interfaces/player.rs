@@ -90,7 +90,7 @@ impl PlayerInterface {
                 }
             }
             Err(e) => {
-                error!("org.mpris.MediaPlayer2.Player.Previous failed: {e}")
+                error!("org.mpris.MediaPlayer2.Player.Previous failed: {e}");
             }
         }
     }
@@ -231,8 +231,7 @@ impl PlayerInterface {
 
         self.mpdclient.lock().await.update_status().await.ok();
         let elapsed = match &self.mpd_state.read().await.playback_state {
-            Playing(s) => s.elapsed,
-            Paused(s) => s.elapsed,
+            Playing(s) | Paused(s) => s.elapsed,
             Stopped => Duration::new(0, 0),
         };
         elapsed.as_micros() as i64

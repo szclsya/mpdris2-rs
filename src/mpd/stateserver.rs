@@ -232,10 +232,10 @@ pub async fn update_album_art(c: &mut MpdClient) -> Result<PathBuf> {
                 let binary_size: u64 = fields.get("binary").unwrap()[0].parse()?;
                 pic_file.write_all(&resp.binary.unwrap()).await?;
                 if binary_size + offset >= size {
+                    // We've read all of them
                     break;
-                } else {
-                    offset += binary_size;
                 }
+                offset += binary_size;
             }
         }
         debug!(
@@ -265,10 +265,10 @@ pub async fn update_album_art(c: &mut MpdClient) -> Result<PathBuf> {
                     let binary_size: u64 = fields.get("binary").unwrap()[0].parse()?;
                     pic_file.write_all(&resp.binary.unwrap()).await?;
                     if binary_size + offset >= size {
+                        // We've read all of them
                         break;
-                    } else {
-                        offset += binary_size;
                     }
+                    offset += binary_size;
                 }
                 debug!(
                     "Album art updated from folder cover file at {}",
@@ -276,7 +276,7 @@ pub async fn update_album_art(c: &mut MpdClient) -> Result<PathBuf> {
                 );
             }
         } else {
-            debug!("No album art found")
+            debug!("No album art found");
         }
     }
     pic_file.flush().await?;

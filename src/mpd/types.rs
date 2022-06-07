@@ -13,8 +13,8 @@ impl MpdResponse {
     pub fn field_map(&self) -> HashMap<String, Vec<String>> {
         let mut res = HashMap::new();
         for (name, value) in &self.fields {
-            res.entry(name.to_owned())
-                .or_insert_with(|| vec![value.to_owned()])
+            res.entry(name.clone())
+                .or_insert_with(|| vec![value.clone()])
                 .push(value.to_owned());
         }
         res

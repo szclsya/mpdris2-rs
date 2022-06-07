@@ -21,7 +21,7 @@ pub fn parse_line(i: &str) -> Result<(&str, &str)> {
                     i
                 )
             }
-            _ => bail!("internal error while parsing mpd line"),
+            Err::Failure(e) => bail!("internal error while parsing mpd line: {e}"),
         },
     };
 

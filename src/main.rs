@@ -23,7 +23,7 @@ use signal_hook_async_std::Signals;
 use std::{path::PathBuf, time::Duration};
 use zbus::{export::futures_util::SinkExt, ConnectionBuilder};
 
-fn main() -> Result<()> {
+fn main() {
     // We don't really need multiple worker thread to pass some music info
     std::env::set_var("ASYNC_STD_THREAD_COUNT", "1");
 
@@ -33,8 +33,6 @@ fn main() -> Result<()> {
             println!("{} {}", "DUE TO".yellow(), cause);
         });
     }
-
-    Ok(())
 }
 
 async fn try_main() -> Result<()> {
@@ -116,7 +114,11 @@ fn setup_logger(debug: bool) -> Result<()> {
         .warn(Color::Yellow)
         .info(Color::Blue);
 
-    let level = if debug { log::LevelFilter::Debug } else { log::LevelFilter::Info };
+    let level = if debug {
+        log::LevelFilter::Debug
+    } else {
+        log::LevelFilter::Info
+    };
 
     fern::Dispatch::new()
         .format(move |out, message, record| {
@@ -125,7 +127,7 @@ fn setup_logger(debug: bool) -> Result<()> {
                 colors.color(record.level()),
                 record.target(),
                 message
-            ))
+            ));
         })
         .level(level)
         .chain(std::io::stdout())

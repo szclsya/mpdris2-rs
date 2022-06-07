@@ -1,5 +1,5 @@
 use super::utils::*;
-/// TrackList interface (org.mpris.MediaPlayer2.TrackList) implementation
+/// `TrackList` interface (org.mpris.MediaPlayer2.TrackList) implementation
 use crate::mpd::MpdStateServer;
 
 use async_std::sync::{Arc, Mutex};

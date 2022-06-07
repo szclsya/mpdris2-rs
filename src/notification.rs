@@ -1,7 +1,10 @@
 #![allow(clippy::too_many_arguments)]
 /// Sending MPD activities as notifications
 use crate::interfaces::MprisStateChange;
-use crate::mpd::{types::MpdState, MpdStateServer};
+use crate::mpd::{
+    types::{MpdPlaybackState, MpdState},
+    MpdStateServer,
+};
 
 use anyhow::Result;
 use async_broadcast::Receiver;
@@ -87,21 +90,27 @@ impl<'a> NotificationRelay<'a> {
         let mut img_uri = state
             .album_art
             .as_ref()
-            .map(|path| path.display().to_string())
-            .unwrap_or_else(|| self.mpd_icon.clone());
+            .map_or_else(|| self.mpd_icon.clone(), |path| path.display().to_string());
         img_uri.insert_str(0, "file://");
-        let (title, artist) = if let Some(metadata) = &state.current_song {
-            let title = metadata
-                .get("Title")
-                .map(|list| list[0].as_str())
-                .unwrap_or("Unknown Song");
-            let artist = metadata
-                .get("Artist")
-                .map(|list| list[0].as_str())
-                .unwrap_or("Unknown Artist");
-            (title, artist)
+        let body = if state.playback_state == MpdPlaybackState::Stopped {
+            "Playback stopped".to_string()
+        } else if let Some(metadata) = &state.current_song {
+            let title = metadata.get("Title").map(|list| list[0].as_str());
+            let artist = metadata.get("Artist").map(|list| list[0].as_str());
+            if title.is_none() && artist.is_none() {
+                metadata
+                    .get("file")
+                    .map_or("Unknown", |l| l[0].as_str())
+                    .to_owned()
+            } else {
+                format!(
+                    "{} - {}",
+                    artist.unwrap_or("Unknown Artist"),
+                    title.unwrap_or("Unknown Song")
+                )
+            }
         } else {
-            ("Unknown Song", "Unknown Artist")
+            "Unknown Song - Unknown Artist".to_string()
         };
 
         let notification_id = self
@@ -111,7 +120,7 @@ impl<'a> NotificationRelay<'a> {
                 self.last_notification_id,
                 &img_uri,
                 &playback_status,
-                &format!("{artist} - {title}"),
+                &body,
                 &[],
                 &self.hints,
                 self.notification_timeout as i32,

@@ -78,7 +78,7 @@ pub async fn notify_loop(
                         .ok();
                     }
                 }
-                _ => (),
+                NextSong => (),
             }
         }
     }
