@@ -163,6 +163,10 @@ async fn update_status(
         }
     } else if new.song.is_some() {
         new.album_art = old.album_art.clone();
+    } else if let Some(path) = old.album_art {
+        if path.is_file().await {
+            fs::remove_file(path).await?;
+        }
     }
 
     // Write changes before broadcasting, so that receivers will have the latest state
