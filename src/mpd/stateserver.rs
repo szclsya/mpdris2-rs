@@ -145,19 +145,9 @@ async fn update_status(
     } else {
         MpdState::from(new_status.field_map(), None)?
     };
-    let old = state.read().await;
+    let old = state.read().await.clone();
 
-    // Send notification
-    if discriminant(&new.playback_state) != discriminant(&old.playback_state) {
-        tx.broadcast(MprisStateChange::Playback).await?;
-    }
-    if new.loop_state != old.loop_state {
-        tx.broadcast(MprisStateChange::Loop).await?;
-    }
-    if new.random != old.random {
-        tx.broadcast(MprisStateChange::Shuffle).await?;
-    }
-    if new.song != old.song {
+    if new.song.is_some() && new.song != old.song {
         match update_album_art(c).await {
             Ok(new_path) => {
                 new.album_art = Some(new_path);
@@ -171,19 +161,34 @@ async fn update_status(
                 error!("Failed to update album art: {}", e);
             }
         }
-        tx.broadcast(MprisStateChange::Song).await?;
     } else {
         new.album_art = old.album_art.clone();
     }
+
+    // Write changes before broadcasting, so that receivers will have the latest state
+    *state.write().await = new;
+
+    // Compare && send state changes
+    let new = state.read().await;
+    if discriminant(&new.playback_state) != discriminant(&old.playback_state) {
+        tx.broadcast(MprisStateChange::Playback).await?;
+    }
+    if new.loop_state != old.loop_state {
+        tx.broadcast(MprisStateChange::Loop).await?;
+    }
+    if new.random != old.random {
+        tx.broadcast(MprisStateChange::Shuffle).await?;
+    }
+    if new.song != old.song {
+        tx.broadcast(MprisStateChange::Song).await?;
+    } 
     if new.next_song != old.next_song {
         tx.broadcast(MprisStateChange::NextSong).await?;
     }
     if new.volume != old.volume {
         tx.broadcast(MprisStateChange::Volume).await?;
     }
-    drop(old);
 
-    *state.write().await = new;
     Ok(())
 }
 
