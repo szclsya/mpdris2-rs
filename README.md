@@ -11,3 +11,9 @@ Currently the following command line arguments are supported:
 - `--port $MPD_PORT` port of MPD server
 - `--no-notification` don't send desktop notification
 - `-v` show debug information
+
+## Implementation Status
+- [x] Root Running
+- [x] Player control
+- [x] Track list
+- [ ] Playlist support
