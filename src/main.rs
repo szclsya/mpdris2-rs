@@ -3,24 +3,23 @@ mod mpd;
 mod notification;
 use notification::NotificationRelay;
 mod config;
-use config::Config;
 
 const BUS_NAME: &str = "org.mpris.MediaPlayer2.mpd";
 const OBJECT_PATH: &str = "/org/mpris/MediaPlayer2";
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use async_std::{
-    fs::File,
     prelude::*,
     sync::{Arc, Mutex},
     task,
 };
+use clap::Parser;
 use colored::Colorize;
 use fern::colors::{Color, ColoredLevelConfig};
 use log::{error, info};
 use signal_hook::consts::signal::*;
 use signal_hook_async_std::Signals;
-use std::{path::PathBuf, time::Duration};
+use std::time::Duration;
 use zbus::{export::futures_util::SinkExt, ConnectionBuilder};
 
 fn main() {
@@ -36,24 +35,10 @@ fn main() {
 }
 
 async fn try_main() -> Result<()> {
-    let args: Vec<String> = std::env::args().collect();
-    let config: Config = if args.len() >= 2 {
-        let config_path = PathBuf::from(&args[1]);
-        let mut config_file = File::open(&config_path)
-            .await
-            .context("Failed to open config file")?;
-        let mut config_content = String::new();
-        config_file
-            .read_to_string(&mut config_content)
-            .await
-            .context("Failed to read config file")?;
-        toml::from_str(&config_content).context("Failed to parse config file")?
-    } else {
-        Config::default()
-    };
-    setup_logger(config.debug)?;
+    let args = config::Args::parse();
+    setup_logger(args.verbose)?;
 
-    let mpd_state_server = mpd::MpdStateServer::init(&config.host, config.port).await?;
+    let mpd_state_server = mpd::MpdStateServer::init(&args.host, args.port).await?;
 
     let mpd_state_server = Arc::new(Mutex::new(mpd_state_server));
     let root_interface = interfaces::RootInterface::default();
@@ -81,7 +66,8 @@ async fn try_main() -> Result<()> {
     });
 
     // Set up notification relay, if requested
-    if config.notification {
+    if !args.no_notification {
+        info!("Notification enabled, starting notification sender...");
         let mut notification =
             NotificationRelay::new(&connection, mpd_state_server.clone()).await?;
         task::spawn(async move {
@@ -95,7 +81,7 @@ async fn try_main() -> Result<()> {
     }
 
     // Now everything is set-up, wait for an exit signal
-    info!("Server started");
+    info!("Service started.");
 
     let mut signals = Signals::new(&[SIGTERM, SIGINT, SIGQUIT])?;
     let handle = signals.handle();
@@ -108,16 +94,16 @@ async fn try_main() -> Result<()> {
     Ok(())
 }
 
-fn setup_logger(debug: bool) -> Result<()> {
+fn setup_logger(debug: u8) -> Result<()> {
     let colors = ColoredLevelConfig::new()
         .error(Color::Red)
         .warn(Color::Yellow)
         .info(Color::Blue);
 
-    let level = if debug {
-        log::LevelFilter::Debug
-    } else {
-        log::LevelFilter::Info
+    let level = match debug {
+        1 => log::LevelFilter::Debug,
+        2 => log::LevelFilter::Trace,
+        _ => log::LevelFilter::Info,
     };
 
     fern::Dispatch::new()

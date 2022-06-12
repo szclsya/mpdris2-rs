@@ -29,7 +29,7 @@ pub struct MpdStateServer {
 }
 
 impl MpdStateServer {
-    pub async fn init(address: &str, port: usize) -> Result<Self> {
+    pub async fn init(address: &str, port: u32) -> Result<Self> {
         // Set up query client
         let mut query_client = MpdClient::new(address, port).await?;
 
@@ -185,7 +185,7 @@ async fn update_status(
     }
     if new.song != old.song {
         tx.broadcast(MprisStateChange::Song).await?;
-    } 
+    }
     if new.next_song != old.next_song {
         tx.broadcast(MprisStateChange::NextSong).await?;
     }

@@ -1,21 +1,19 @@
 /// The configuration file format
-use serde::Deserialize;
+use clap::Parser;
 
-#[derive(Deserialize)]
-pub struct Config {
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+pub struct Args {
+    /// Address of MPD server (Default: localhost)
+    #[clap(long, default_value = "localhost")]
     pub host: String,
-    pub port: usize,
-    pub notification: bool,
-    pub debug: bool,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Config {
-            host: "127.0.0.1".to_string(),
-            port: 6600,
-            notification: true,
-            debug: false,
-        }
-    }
+    /// Port of MPD server (Default: 6600)
+    #[clap(long, default_value = "6600")]
+    pub port: u32,
+    /// Disable notification
+    #[clap(long)]
+    pub no_notification: bool,
+    /// Verbosity
+    #[clap(short, default_value_t = 0)]
+    pub verbose: u8,
 }

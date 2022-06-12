@@ -16,11 +16,11 @@ pub struct MpdClient {
 
     // MPD info
     ip: String,
-    port: usize,
+    port: u32,
 }
 
 impl MpdClient {
-    pub async fn new(ip: &str, port: usize) -> Result<Self> {
+    pub async fn new(ip: &str, port: u32) -> Result<Self> {
         let stream = TcpStream::connect(format!("{}:{}", ip, port))
             .await
             .context(format!("Cannot connect to MPD server at {ip}:{port}"))?;
