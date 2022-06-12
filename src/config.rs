@@ -14,6 +14,6 @@ pub struct Args {
     #[clap(long)]
     pub no_notification: bool,
     /// Verbosity
-    #[clap(short, default_value_t = 0)]
+    #[clap(short, parse(from_occurrences))]
     pub verbose: u8,
 }
