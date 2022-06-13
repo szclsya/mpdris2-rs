@@ -8,7 +8,6 @@ use async_std::{
     prelude::*,
 };
 use log::{debug, error, info};
-use std::time::Duration;
 
 pub struct MpdClient {
     reader: BufReader<TcpStream>,
