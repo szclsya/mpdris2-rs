@@ -106,6 +106,23 @@ impl MpdStateServer {
             }
         }
     }
+
+    pub async fn ready(&self) -> Result<()> {
+        use MprisStateChange::*;
+
+        let mut client = self.query_client.lock().await;
+        let tx = &self.mpris_event_tx;
+        update_status(&mut client, &self.state, tx).await?;
+
+        tx.broadcast(Playback).await?;
+        tx.broadcast(Loop).await?;
+        tx.broadcast(Shuffle).await?;
+        tx.broadcast(Volume).await?;
+        tx.broadcast(Song).await?;
+        tx.broadcast(NextSong).await?;
+        tx.broadcast(Tracklist).await?;
+        Ok(())
+    }
 }
 
 async fn idle(
