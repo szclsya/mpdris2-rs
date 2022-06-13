@@ -52,6 +52,7 @@ impl MpdClient {
 
     pub async fn reconnect_until_success(&mut self) {
         error!("MPD connection broken, attempting reconnect...");
+        let mut first_retry = true;
         loop {
             match self.reconnect().await {
                 Ok(_) => {
@@ -59,9 +60,14 @@ impl MpdClient {
                     break;
                 }
                 Err(e) => {
-                    error!("Reconnect failed: {}", e);
-                    error!("Will reattempt in 5s...");
-                    async_std::task::sleep(Duration::from_secs(5)).await;
+                    if first_retry {
+                        error!("Reconnect failed: {}", e);
+                        error!("Will reattempt every 5s...");
+                        first_retry = false;
+                    } else {
+                        debug!("Reconnect failed");
+                    }
+                    async_std::task::sleep(crate::RETRY_INTERVAL).await;
                 }
             }
         }

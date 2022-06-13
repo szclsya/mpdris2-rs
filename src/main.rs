@@ -6,6 +6,7 @@ mod config;
 
 const BUS_NAME: &str = "org.mpris.MediaPlayer2.mpd";
 const OBJECT_PATH: &str = "/org/mpris/MediaPlayer2";
+const RETRY_INTERVAL: Duration = Duration::from_secs(5);
 
 use anyhow::Result;
 use async_std::{
@@ -16,7 +17,7 @@ use async_std::{
 use clap::Parser;
 use colored::Colorize;
 use fern::colors::{Color, ColoredLevelConfig};
-use log::{error, info};
+use log::{error, info, debug};
 use signal_hook::consts::signal::*;
 use signal_hook_async_std::Signals;
 use std::time::Duration;
@@ -38,7 +39,21 @@ async fn try_main() -> Result<()> {
     let args = config::Args::parse();
     setup_logger(args.verbose)?;
 
-    let mpd_state_server = mpd::MpdStateServer::init(&args.host, args.port).await?;
+    let mut first_retry = true;
+    let mpd_state_server = loop {
+        match mpd::MpdStateServer::init(&args.host, args.port).await {
+            Ok(c) => break c,
+            Err(e) =>{
+                if first_retry {
+                    error!("Failed to connect to MPD server: {e}. Will try again every 5 secs...");
+                    first_retry = false;
+                } else {
+                    debug!("Retry failed.");
+                }
+                task::sleep(RETRY_INTERVAL).await;
+            }
+        }
+    };
 
     let mpd_state_server = Arc::new(Mutex::new(mpd_state_server));
     let root_interface = interfaces::RootInterface::default();
@@ -74,7 +89,7 @@ async fn try_main() -> Result<()> {
             loop {
                 if let Err(e) = notification.send_notification_on_event().await {
                     error!("NotificationRelay dead, restarting. Reason: {e}");
-                    task::sleep(Duration::from_secs(5)).await;
+                    task::sleep(RETRY_INTERVAL).await;
                 }
             }
         });
