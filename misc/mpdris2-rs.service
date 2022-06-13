@@ -5,7 +5,7 @@ After=mpd.service
 
 [Service]
 Restart=on-faliure
-ExecStart=/usr/bin/mpdris2-rs
+ExecStart=/usr/local/bin/mpdris2-rs
 BusName=org.mpris.MediaPlayer2.mpd
 
 [Install]
