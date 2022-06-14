@@ -50,7 +50,7 @@ pub struct MpdState {
     pub playback_state: MpdPlaybackState,
     pub loop_state: MpdLoopState,
     pub random: bool,
-    pub volume: u8,
+    pub volume: Option<u8>,
     // Option<(playlist_id, song_id)>
     pub song: Option<(u64, u64)>,
     pub next_song: Option<(u64, u64)>,
@@ -72,6 +72,11 @@ impl MpdState {
         let song_id = status.remove("songid");
         let next_song = status.remove("nextsong");
         let next_song_id = status.remove("nextsongid");
+        let volume = if let Some(vol) = status.remove("volume") {
+            Some(vol[0].parse()?)
+        } else {
+            None
+        };
         let mut get_or_complain = |name: &str| match status.remove(name) {
             Some(c) => c[0].clone(),
             None => {
@@ -83,7 +88,6 @@ impl MpdState {
         let repeat = get_or_complain("repeat");
         let single = get_or_complain("single");
         let random = get_or_complain("random");
-        let volume = get_or_complain("volume");
         let playback_state = if state == "play" || state == "pause" {
             let elapsed = get_or_complain("elapsed");
             let duration = get_or_complain("duration");
@@ -131,7 +135,7 @@ impl MpdState {
             playback_state,
             loop_state: MpdLoopState::from_mpd(&repeat, &single)?,
             random: mpd_num_to_bool(&random, "random")?,
-            volume: volume.parse()?,
+            volume,
             song,
             next_song,
             playlistlength: playlistlength.and_then(|s| s[0].parse().ok()).unwrap_or(0),
