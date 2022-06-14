@@ -17,7 +17,7 @@ use async_std::{
 use clap::Parser;
 use colored::Colorize;
 use fern::colors::{Color, ColoredLevelConfig};
-use log::{error, info, debug};
+use log::{debug, error, info};
 use signal_hook::consts::signal::*;
 use signal_hook_async_std::Signals;
 use std::time::Duration;
@@ -43,7 +43,7 @@ async fn try_main() -> Result<()> {
     let mpd_state_server = loop {
         match mpd::MpdStateServer::init(&args.host, args.port).await {
             Ok(c) => break c,
-            Err(e) =>{
+            Err(e) => {
                 if first_retry {
                     error!("Failed to connect to MPD server: {e}. Will try again every 5 secs...");
                     first_retry = false;

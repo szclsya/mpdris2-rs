@@ -222,7 +222,7 @@ impl PlayerInterface {
     async fn set_volume(&self, volume: f64) {
         if self.mpd_state.read().await.volume == None {
             // No mixer, can't change volume
-            return
+            return;
         }
 
         let mut volume = (volume * 100.0).floor();
