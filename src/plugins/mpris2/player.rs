@@ -220,11 +220,6 @@ impl PlayerInterface {
 
     #[dbus_interface(property, name = "Volume")]
     async fn set_volume(&self, volume: f64) {
-        if self.mpd_state.read().await.volume == None {
-            // No mixer, can't change volume
-            return;
-        }
-
         let mut volume = (volume * 100.0).floor();
         if volume < 0.0 {
             volume = 0.0;

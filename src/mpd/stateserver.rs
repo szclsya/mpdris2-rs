@@ -1,6 +1,5 @@
 use super::{types, types::MpdState, MpdClient};
-///
-use crate::interfaces::MprisStateChange;
+use crate::types::PlayerStateChange;
 
 use anyhow::{bail, format_err, Result};
 use async_broadcast::{broadcast, InactiveReceiver, Receiver, Sender};
@@ -21,8 +20,8 @@ const PING_INTERVAL: Duration = Duration::from_secs(55);
 pub struct MpdStateServer {
     query_client: Arc<Mutex<MpdClient>>,
 
-    mpris_event_tx: Sender<MprisStateChange>,
-    _mpris_event_rx: InactiveReceiver<MprisStateChange>,
+    mpris_event_tx: Sender<PlayerStateChange>,
+    _mpris_event_rx: InactiveReceiver<PlayerStateChange>,
 
     // State caches
     state: Arc<RwLock<types::MpdState>>,
@@ -80,7 +79,7 @@ impl MpdStateServer {
         Ok(res)
     }
 
-    pub fn get_mpris_event_rx(&self) -> Receiver<MprisStateChange> {
+    pub fn get_mpris_event_rx(&self) -> Receiver<PlayerStateChange> {
         self.mpris_event_tx.new_receiver()
     }
 
@@ -108,7 +107,7 @@ impl MpdStateServer {
     }
 
     pub async fn ready(&self) -> Result<()> {
-        use MprisStateChange::*;
+        use PlayerStateChange::*;
 
         let mut client = self.query_client.lock().await;
         let tx = &self.mpris_event_tx;
@@ -128,7 +127,7 @@ impl MpdStateServer {
 async fn idle(
     c: &mut MpdClient,
     state: &Arc<RwLock<MpdState>>,
-    tx: &Sender<MprisStateChange>,
+    tx: &Sender<PlayerStateChange>,
 ) -> Result<()> {
     debug!("Entering idle...");
     let res = c.issue_command(IDLE_CMD).await?;
@@ -139,7 +138,7 @@ async fn idle(
             match field.as_str() {
                 "stored_playlist" => (),
                 "playlist" => {
-                    tx.broadcast(MprisStateChange::Tracklist).await?;
+                    tx.broadcast(PlayerStateChange::Tracklist).await?;
                 }
                 "player" | "mixer" | "options" => update_status(c, state, tx).await?,
                 _ => (),
@@ -153,7 +152,7 @@ async fn idle(
 async fn update_status(
     c: &mut MpdClient,
     state: &Arc<RwLock<types::MpdState>>,
-    tx: &Sender<MprisStateChange>,
+    tx: &Sender<PlayerStateChange>,
 ) -> Result<()> {
     let new_status = c.issue_command("status").await?;
     let mut new = if new_status.fields.iter().any(|(name, _)| name == "song") {
@@ -192,22 +191,22 @@ async fn update_status(
     // Compare && send state changes
     let new = state.read().await;
     if discriminant(&new.playback_state) != discriminant(&old.playback_state) {
-        tx.broadcast(MprisStateChange::Playback).await?;
+        tx.broadcast(PlayerStateChange::Playback).await?;
     }
     if new.loop_state != old.loop_state {
-        tx.broadcast(MprisStateChange::Loop).await?;
+        tx.broadcast(PlayerStateChange::Loop).await?;
     }
     if new.random != old.random {
-        tx.broadcast(MprisStateChange::Shuffle).await?;
+        tx.broadcast(PlayerStateChange::Shuffle).await?;
     }
     if new.song != old.song {
-        tx.broadcast(MprisStateChange::Song).await?;
+        tx.broadcast(PlayerStateChange::Song).await?;
     }
     if new.next_song != old.next_song {
-        tx.broadcast(MprisStateChange::NextSong).await?;
+        tx.broadcast(PlayerStateChange::NextSong).await?;
     }
     if new.volume != old.volume {
-        tx.broadcast(MprisStateChange::Volume).await?;
+        tx.broadcast(PlayerStateChange::Volume).await?;
     }
 
     Ok(())

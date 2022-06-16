@@ -1,11 +1,8 @@
-mod interfaces;
-mod mpd;
-mod notification;
-use notification::NotificationRelay;
 mod config;
+mod mpd;
+mod plugins;
+mod types;
 
-const BUS_NAME: &str = "org.mpris.MediaPlayer2.mpd";
-const OBJECT_PATH: &str = "/org/mpris/MediaPlayer2";
 const RETRY_INTERVAL: Duration = Duration::from_secs(5);
 
 use anyhow::Result;
@@ -21,7 +18,7 @@ use log::{debug, error, info};
 use signal_hook::consts::signal::*;
 use signal_hook_async_std::Signals;
 use std::time::Duration;
-use zbus::{export::futures_util::SinkExt, ConnectionBuilder};
+use zbus::export::futures_util::SinkExt;
 
 fn main() {
     // We don't really need multiple worker thread to pass some music info
@@ -56,43 +53,14 @@ async fn try_main() -> Result<()> {
     };
 
     let mpd_state_server = Arc::new(Mutex::new(mpd_state_server));
-    let root_interface = interfaces::RootInterface::default();
-    let player_interface = interfaces::PlayerInterface::new(mpd_state_server.clone()).await;
-    let tracklist_interface = interfaces::TracklistInterface::new(mpd_state_server.clone());
 
-    let mut connection = ConnectionBuilder::session()?
-        .name(BUS_NAME)?
-        .serve_at(OBJECT_PATH, root_interface)?
-        .serve_at(OBJECT_PATH, player_interface)?
-        .serve_at(OBJECT_PATH, tracklist_interface)?
-        .build()
-        .await?;
-
-    // Register state change updater
-    let c2 = connection.clone();
-    let client2 = mpd_state_server.clone();
-    let mut rx2 = mpd_state_server.lock().await.get_mpris_event_rx();
-    task::spawn(async move {
-        loop {
-            if let Err(e) = interfaces::notify_loop(&c2, &mut rx2, &client2).await {
-                error!("D-Bus property change notifier dead, restarting. Reason: {e}");
-            }
-        }
-    });
+    // Always need MPRIS2
+    let mut connection = plugins::mpris2::start(mpd_state_server.clone()).await?;
 
     // Set up notification relay, if requested
     if !args.no_notification {
         info!("Notification enabled, starting notification sender...");
-        let mut notification =
-            NotificationRelay::new(&connection, mpd_state_server.clone()).await?;
-        task::spawn(async move {
-            loop {
-                if let Err(e) = notification.send_notification_on_event().await {
-                    error!("NotificationRelay dead, restarting. Reason: {e}");
-                    task::sleep(RETRY_INTERVAL).await;
-                }
-            }
-        });
+        plugins::fdo_notification::start(&connection, mpd_state_server.clone()).await?;
     }
 
     // Broadcast MPD server state change

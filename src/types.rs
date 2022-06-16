@@ -1,5 +1,5 @@
 #[derive(Clone)]
-pub enum MprisStateChange {
+pub enum PlayerStateChange {
     Playback,
     Loop,
     Shuffle,

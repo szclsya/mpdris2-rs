@@ -1,5 +1,5 @@
-use super::{MprisStateChange, PlayerInterface, TracklistInterface};
-use crate::mpd::MpdStateServer;
+use super::{PlayerInterface, TracklistInterface, OBJECT_PATH};
+use crate::{mpd::MpdStateServer, types::PlayerStateChange};
 
 use anyhow::Result;
 use async_broadcast::Receiver;
@@ -10,17 +10,17 @@ use zvariant::ObjectPath;
 
 pub async fn notify_loop(
     c: &Connection,
-    rx: &mut Receiver<MprisStateChange>,
+    rx: &mut Receiver<PlayerStateChange>,
     client: &Arc<Mutex<MpdStateServer>>,
 ) -> Result<()> {
-    use MprisStateChange::*;
+    use PlayerStateChange::*;
     let player_iface_ref = c
         .object_server()
-        .interface::<_, PlayerInterface>(crate::OBJECT_PATH)
+        .interface::<_, PlayerInterface>(OBJECT_PATH)
         .await?;
     let tracklist_iface_ref = c
         .object_server()
-        .interface::<_, TracklistInterface>(crate::OBJECT_PATH)
+        .interface::<_, TracklistInterface>(OBJECT_PATH)
         .await?;
 
     loop {

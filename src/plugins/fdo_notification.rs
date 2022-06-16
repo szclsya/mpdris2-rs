@@ -1,15 +1,18 @@
 #![allow(clippy::too_many_arguments)]
-/// Sending MPD activities as notifications
-use crate::interfaces::MprisStateChange;
 use crate::mpd::{
     types::{MpdPlaybackState, MpdState},
     MpdStateServer,
 };
+/// Sending MPD activities as notifications
+use crate::types::PlayerStateChange;
 
 use anyhow::Result;
 use async_broadcast::Receiver;
-use async_std::sync::{Arc, Mutex, RwLock};
-use log::debug;
+use async_std::{
+    sync::{Arc, Mutex, RwLock},
+    task,
+};
+use log::{debug, error};
 use std::collections::HashMap;
 use zbus::{dbus_proxy, Connection};
 use zvariant::Value;
@@ -33,9 +36,9 @@ trait Notifications {
     ) -> zbus::Result<u32>;
 }
 
-pub struct NotificationRelay<'a> {
+pub struct FdoNotificationRelay<'a> {
     proxy: NotificationsProxy<'a>,
-    mpris_event_rx: Receiver<MprisStateChange>,
+    mpris_event_rx: Receiver<PlayerStateChange>,
     state: Arc<RwLock<MpdState>>,
 
     // Settings
@@ -45,11 +48,11 @@ pub struct NotificationRelay<'a> {
     hints: HashMap<&'a str, Value<'a>>,
 }
 
-impl<'a> NotificationRelay<'a> {
+impl<'a> FdoNotificationRelay<'a> {
     pub async fn new(
         connection: &Connection,
         client: Arc<Mutex<MpdStateServer>>,
-    ) -> Result<NotificationRelay<'a>> {
+    ) -> Result<FdoNotificationRelay<'a>> {
         let proxy = NotificationsProxy::new(connection).await?;
         let client = client.lock().await;
         let mpris_event_rx = client.get_mpris_event_rx();
@@ -57,7 +60,7 @@ impl<'a> NotificationRelay<'a> {
         let mut hints = HashMap::new();
         hints.insert("urgency", Value::from(0));
 
-        let res = NotificationRelay {
+        let res = FdoNotificationRelay {
             proxy,
             mpris_event_rx,
             state,
@@ -70,8 +73,8 @@ impl<'a> NotificationRelay<'a> {
         Ok(res)
     }
 
-    pub async fn send_notification_on_event(&mut self) -> Result<()> {
-        use MprisStateChange::*;
+    async fn send_notification_on_event(&mut self) -> Result<()> {
+        use PlayerStateChange::*;
         loop {
             debug!("Waiting for MPD state change from NotificationRelay...");
             let event = self.mpris_event_rx.recv().await?;
@@ -97,7 +100,7 @@ impl<'a> NotificationRelay<'a> {
         } else if let Some(metadata) = &state.current_song {
             let title = metadata.get("Title").map(|list| list[0].as_str());
             let artist = metadata.get("Artist").map(|list| list[0].as_str());
-            if title.is_none() && artist.is_none() {
+            if title.is_none() || artist.is_none() {
                 metadata
                     .get("file")
                     .map_or("Unknown", |l| l[0].as_str())
@@ -131,4 +134,17 @@ impl<'a> NotificationRelay<'a> {
 
         Ok(())
     }
+}
+
+pub async fn start(connection: &Connection, mpdclient: Arc<Mutex<MpdStateServer>>) -> Result<()> {
+    let mut notification_relay = FdoNotificationRelay::new(connection, mpdclient).await?;
+    async_std::task::spawn(async move {
+        loop {
+            if let Err(e) = notification_relay.send_notification_on_event().await {
+                error!("NotificationRelay dead, restarting. Reason: {e}");
+                task::sleep(crate::RETRY_INTERVAL).await;
+            }
+        }
+    });
+    Ok(())
 }
