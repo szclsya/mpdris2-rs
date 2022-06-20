@@ -44,7 +44,16 @@ pub fn to_mpris_metadata<'a>(
     convert_str_tag(i, r, "Genre", "xesam:genre");
     convert_str_tag(i, r, "Title", "xesam:title");
     convert_int_tag(i, r, "Track", "xesam:trackNumber");
-    convert_str_tag(i, r, "file", "xesam:url");
+    if let Some(mut value) = i.remove("file") {
+        let r = value.remove(0);
+
+        // Use filename as title, if title doesn't exist
+        let title = find_filename_from_relpath(&r);
+        res.entry("xesam:title".to_owned()).or_insert_with(|| Value::new(title.to_owned()));
+
+        res.insert("xesam:url".to_owned(), Value::new(r));
+    }
+
     Ok(res)
 }
 
@@ -83,7 +92,15 @@ fn convert_int_tag(
         if let Ok(r) = value.parse::<i64>() {
             res.insert(mpris_key.to_owned(), Value::new(r));
         } else {
-            error!("Can't parse metadata tag {mpd_key} -> {mpris_key} with value {value}");
+            error!("can't parse metadata tag {mpd_key} -> {mpris_key} with value {value}");
         }
+    }
+}
+
+fn find_filename_from_relpath(i: &str) -> &str {
+    if let Some(pos) = i.rfind('/') {
+        &i[pos+1..]
+    } else {
+        i
     }
 }
