@@ -89,17 +89,22 @@ impl MpdState {
         let single = get_or_complain("single");
         let random = get_or_complain("random");
         let playback_state = if state == "play" || state == "pause" {
-            let elapsed = get_or_complain("elapsed");
-            let duration = get_or_complain("duration");
-            if !missing_fields.is_empty() {
-                bail!(
-                    "missing fields from MPD status: {}",
-                    missing_fields.join(", ")
-                );
-            }
+            let elapsed = status.remove("elapsed");
+            let duration = status.remove("duration");
+            let elapsed = if let Some(time) = elapsed {
+                Some(Duration::from_secs_f64(time[0].parse()?))
+            } else {
+                None
+            };
+            let duration = if let Some(time) = duration {
+                Some(Duration::from_secs_f64(time[0].parse()?))
+            } else {
+                None
+            };
+
             let playing_state = MpdPlayingState {
-                elapsed: Duration::from_secs_f64(elapsed.parse()?),
-                duration: Duration::from_secs_f64(duration.parse()?),
+                elapsed,
+                duration,
             };
             if state == "play" {
                 MpdPlaybackState::Playing(playing_state)
@@ -168,8 +173,8 @@ impl Display for MpdPlaybackState {
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct MpdPlayingState {
-    pub elapsed: Duration,
-    pub duration: Duration,
+    pub elapsed: Option<Duration>,
+    pub duration: Option<Duration>,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]

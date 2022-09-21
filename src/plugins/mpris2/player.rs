@@ -78,8 +78,10 @@ impl PlayerInterface {
         let state = self.mpd_state.read().await;
         let mut cmd = "previous";
         if let MpdPlaybackState::Playing(state) = &state.playback_state {
-            if state.elapsed.as_secs_f32() > 3.0 {
-                cmd = "seekcur 0";
+            if let Some(elapsed) = state.elapsed {
+                if elapsed.as_secs_f32() > 3.0 {
+                    cmd = "seekcur 0";
+                }
             }
         }
 
@@ -235,7 +237,13 @@ impl PlayerInterface {
 
         self.mpdclient.lock().await.update_status().await.ok();
         let elapsed = match &self.mpd_state.read().await.playback_state {
-            Playing(s) | Paused(s) => s.elapsed,
+            Playing(s) | Paused(s) => {
+                if let Some(elapsed) = s.elapsed {
+                    elapsed
+                } else {
+                    Duration::new(0, 0)
+                }
+            },
             Stopped => Duration::new(0, 0),
         };
         elapsed.as_micros() as i64
