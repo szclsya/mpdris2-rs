@@ -11,7 +11,7 @@ thiserror = "1"
 async-std = "1" 
 async-broadcast = "0.4"
 # Commuicating with D-Bus
-zbus = "2"
+zbus = "3"
 zvariant = "3"
 serde = "1"
 # Parsing MPD protocol

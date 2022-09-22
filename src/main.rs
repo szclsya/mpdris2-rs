@@ -18,7 +18,6 @@ use log::{debug, error, info};
 use signal_hook::consts::signal::*;
 use signal_hook_async_std::Signals;
 use std::time::Duration;
-use zbus::export::futures_util::SinkExt;
 
 fn main() {
     // We don't really need multiple worker thread to pass some music info
@@ -55,7 +54,7 @@ async fn try_main() -> Result<()> {
     let mpd_state_server = Arc::new(Mutex::new(mpd_state_server));
 
     // Always need MPRIS2
-    let mut connection = plugins::mpris2::start(mpd_state_server.clone()).await?;
+    let connection = plugins::mpris2::start(mpd_state_server.clone()).await?;
 
     // Set up notification relay, if requested
     if !args.no_notification {
@@ -73,7 +72,6 @@ async fn try_main() -> Result<()> {
     let handle = signals.handle();
     if let Some(_signal) = signals.next().await {
         info!("Exit signal received, closing D-Bus connection");
-        connection.close().await?;
         handle.close();
     }
 
