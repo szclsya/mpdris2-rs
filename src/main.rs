@@ -15,7 +15,7 @@ use clap::Parser;
 use colored::Colorize;
 use fern::colors::{Color, ColoredLevelConfig};
 use log::{debug, error, info};
-use signal_hook::consts::signal::*;
+use signal_hook::consts::signal::{SIGTERM, SIGINT, SIGQUIT};
 use signal_hook_async_std::Signals;
 use std::time::Duration;
 
@@ -68,7 +68,7 @@ async fn try_main() -> Result<()> {
     // Now everything is set-up, wait for an exit signal
     info!("Service started.");
 
-    let mut signals = Signals::new(&[SIGTERM, SIGINT, SIGQUIT])?;
+    let mut signals = Signals::new([SIGTERM, SIGINT, SIGQUIT])?;
     let handle = signals.handle();
     if let Some(_signal) = signals.next().await {
         info!("Exit signal received, closing D-Bus connection");

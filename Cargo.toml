@@ -9,7 +9,7 @@ license = "GPL-3.0-or-later"
 anyhow = "1"
 thiserror = "1"
 async-std = "1" 
-async-broadcast = "0.4"
+async-broadcast = "0.5"
 # Commuicating with D-Bus
 zbus = "3"
 zvariant = "3"
@@ -24,7 +24,7 @@ fern = { version = "0.6", features = ["colored"] }
 signal-hook = "0.3"
 signal-hook-async-std = "0.2"
 # Config
-clap = { version = "3", features = ["derive"]}
+clap = { version = "4", features = ["derive"]}
 
 [profile.release]
 lto = true

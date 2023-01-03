@@ -87,6 +87,7 @@ impl<'a> TracklistInterface {
         current: ObjectPath<'_>,
     ) -> zbus::Result<()>;
 
+    #[allow(dead_code)]
     #[dbus_interface(signal, name = "TrackAdded")]
     async fn track_added(
         ctxt: &SignalContext<'_>,
@@ -94,6 +95,7 @@ impl<'a> TracklistInterface {
         after: ObjectPath<'_>,
     ) -> zbus::Result<()>;
 
+    #[allow(dead_code)]
     #[dbus_interface(signal, name = "TrackRemoved")]
     async fn track_removed(ctxt: &SignalContext<'_>, track: ObjectPath<'_>) -> zbus::Result<()>;
 
