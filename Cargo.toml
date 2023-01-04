@@ -25,6 +25,7 @@ signal-hook = "0.3"
 signal-hook-async-std = "0.2"
 # Config
 clap = { version = "4", features = ["derive"]}
+dirs = "4.0.0"
 
 [profile.release]
 lto = true
