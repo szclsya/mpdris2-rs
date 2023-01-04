@@ -223,8 +223,11 @@ pub async fn update_album_art(c: &mut MpdClient) -> Result<PathBuf> {
         Some(mut id) => id.remove(0),
         None => bail!("invalid MPD response: no current song ID"),
     };
+    let pic_dir = match dirs::runtime_dir() {
+        Some(path) => PathBuf::from(path),
+        None => PathBuf::from("/tmp"),
+    }.join("mpd/album_art/");
 
-    let pic_dir = PathBuf::from("/tmp/mpd/album_art/");
     if !pic_dir.is_dir().await {
         async_std::fs::create_dir_all(&pic_dir).await?;
     }

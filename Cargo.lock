@@ -653,6 +653,7 @@ dependencies = [
  "async-std",
  "clap",
  "colored 2.0.0",
+ "dirs",
  "fern",
  "log",
  "nom",
