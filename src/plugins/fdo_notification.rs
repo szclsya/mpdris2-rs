@@ -8,11 +8,9 @@ use crate::types::PlayerStateChange;
 
 use anyhow::Result;
 use async_broadcast::Receiver;
-use async_std::{
-    sync::{Arc, Mutex, RwLock},
-    task,
-};
+use async_dup::{Arc, Mutex};
 use log::{debug, error};
+use smol::{lock::RwLock, spawn, Task, Timer};
 use std::collections::HashMap;
 use zbus::{dbus_proxy, Connection};
 use zvariant::Value;
@@ -20,7 +18,7 @@ use zvariant::Value;
 const DEFAULT_PLAYER_NAME: &str = "Music Player Daemon";
 const DEFAULT_MPD_ICON_PATH: &str = "/usr/share/icons/hicolor/scalable/apps/mpd.svg";
 
-#[dbus_proxy]
+#[dbus_proxy(assume_defaults = true)]
 trait Notifications {
     /// Call the org.freedesktop.Notifications.Notify D-Bus method
     fn notify(
@@ -54,7 +52,7 @@ impl<'a> FdoNotificationRelay<'a> {
         client: Arc<Mutex<MpdStateServer>>,
     ) -> Result<FdoNotificationRelay<'a>> {
         let proxy = NotificationsProxy::new(connection).await?;
-        let client = client.lock().await;
+        let client = client.lock();
         let mpris_event_rx = client.get_mpris_event_rx();
         let state = client.get_status();
         let mut hints = HashMap::new();
@@ -136,15 +134,18 @@ impl<'a> FdoNotificationRelay<'a> {
     }
 }
 
-pub async fn start(connection: &Connection, mpdclient: Arc<Mutex<MpdStateServer>>) -> Result<()> {
+pub async fn start(
+    connection: &Connection,
+    mpdclient: Arc<Mutex<MpdStateServer>>,
+) -> Result<Task<()>> {
     let mut notification_relay = FdoNotificationRelay::new(connection, mpdclient).await?;
-    async_std::task::spawn(async move {
+    let task = spawn(async move {
         loop {
             if let Err(e) = notification_relay.send_notification_on_event().await {
                 error!("NotificationRelay dead, restarting. Reason: {e}");
-                task::sleep(crate::RETRY_INTERVAL).await;
+                Timer::after(crate::RETRY_INTERVAL).await;
             }
         }
     });
-    Ok(())
+    Ok(task)
 }

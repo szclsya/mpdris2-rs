@@ -49,7 +49,8 @@ pub fn to_mpris_metadata<'a>(
 
         // Use filename as title, if title doesn't exist
         let title = find_filename_from_relpath(&r);
-        res.entry("xesam:title".to_owned()).or_insert_with(|| Value::new(title.to_owned()));
+        res.entry("xesam:title".to_owned())
+            .or_insert_with(|| Value::new(title.to_owned()));
 
         res.insert("xesam:url".to_owned(), Value::new(r));
     }
@@ -99,7 +100,7 @@ fn convert_int_tag(
 
 fn find_filename_from_relpath(i: &str) -> &str {
     if let Some(pos) = i.rfind('/') {
-        &i[pos+1..]
+        &i[pos + 1..]
     } else {
         i
     }

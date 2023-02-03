@@ -3,7 +3,7 @@ use crate::{mpd::MpdStateServer, types::PlayerStateChange};
 
 use anyhow::Result;
 use async_broadcast::Receiver;
-use async_std::sync::{Arc, Mutex};
+use async_dup::{Arc, Mutex};
 use log::debug;
 use zbus::Connection;
 use zvariant::ObjectPath;
@@ -62,7 +62,7 @@ pub async fn notify_loop(
                             ObjectPath::try_from("/org/mpris/MediaPlayer2/TrackList/NoTrack")
                                 .unwrap()
                         } else {
-                            let client = client.lock().await;
+                            let client = client.lock();
                             let state = client.get_status();
                             let state = state.read().await;
                             let current_pos = state.song.unwrap_or((0, 0)).0;

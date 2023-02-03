@@ -14,11 +14,12 @@ use root::RootInterface;
 use tracklist::TracklistInterface;
 
 use anyhow::Result;
-use async_std::sync::{Arc, Mutex};
+use async_dup::{Arc, Mutex};
 use log::error;
+use smol::{spawn, Task};
 use zbus::{Connection, ConnectionBuilder};
 
-pub async fn start(mpd_state_server: Arc<Mutex<MpdStateServer>>) -> Result<Connection> {
+pub async fn start(mpd_state_server: Arc<Mutex<MpdStateServer>>) -> Result<(Connection, Task<()>)> {
     let root_interface = RootInterface::default();
     let player_interface = PlayerInterface::new(mpd_state_server.clone()).await;
     let tracklist_interface = TracklistInterface::new(mpd_state_server.clone());
@@ -33,9 +34,9 @@ pub async fn start(mpd_state_server: Arc<Mutex<MpdStateServer>>) -> Result<Conne
 
     let connection2 = connection.clone();
     let client = mpd_state_server.clone();
-    let mut rx = mpd_state_server.lock().await.get_mpris_event_rx();
+    let mut rx = mpd_state_server.lock().get_mpris_event_rx();
 
-    async_std::task::spawn(async move {
+    let notifier = spawn(async move {
         loop {
             if let Err(e) = notify_loop(&connection2, &mut rx, &client).await {
                 error!("D-Bus property change notifier dead, restarting. Reason: {e}");
@@ -43,5 +44,5 @@ pub async fn start(mpd_state_server: Arc<Mutex<MpdStateServer>>) -> Result<Conne
         }
     });
 
-    Ok(connection)
+    Ok((connection, notifier))
 }

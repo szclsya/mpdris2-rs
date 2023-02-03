@@ -8,8 +8,9 @@ license = "GPL-3.0-or-later"
 [dependencies]
 anyhow = "1"
 thiserror = "1"
-async-std = "1" 
+smol = "1"
 async-broadcast = "0.5"
+async-dup = "1"
 # Commuicating with D-Bus
 zbus = "3"
 zvariant = "3"
@@ -28,4 +29,6 @@ clap = { version = "4", features = ["derive"]}
 dirs = "4.0.0"
 
 [profile.release]
+# Optimize for size. This isn't a performance sensitive app
+opt-level = "z"
 lto = true

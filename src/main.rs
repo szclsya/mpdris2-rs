@@ -6,24 +6,21 @@ mod types;
 const RETRY_INTERVAL: Duration = Duration::from_secs(5);
 
 use anyhow::Result;
-use async_std::{
-    prelude::*,
-    sync::{Arc, Mutex},
-    task,
-};
+use async_dup::{Arc, Mutex};
 use clap::Parser;
 use colored::Colorize;
 use fern::colors::{Color, ColoredLevelConfig};
 use log::{debug, error, info};
-use signal_hook::consts::signal::{SIGTERM, SIGINT, SIGQUIT};
+use signal_hook::consts::signal::{SIGINT, SIGQUIT, SIGTERM};
 use signal_hook_async_std::Signals;
+use smol::stream::StreamExt;
 use std::time::Duration;
 
 fn main() {
     // We don't really need multiple worker thread to pass some music info
     std::env::set_var("ASYNC_STD_THREAD_COUNT", "1");
 
-    if let Err(err) = async_std::task::block_on(try_main()) {
+    if let Err(err) = smol::block_on(try_main()) {
         println!("{:>6} {err}", "ERROR".red());
         err.chain().skip(1).for_each(|cause| {
             println!("{} {}", "DUE TO".yellow(), cause);
@@ -46,7 +43,7 @@ async fn try_main() -> Result<()> {
                 } else {
                     debug!("Retry failed.");
                 }
-                task::sleep(RETRY_INTERVAL).await;
+                smol::Timer::after(RETRY_INTERVAL).await;
             }
         }
     };
@@ -54,16 +51,17 @@ async fn try_main() -> Result<()> {
     let mpd_state_server = Arc::new(Mutex::new(mpd_state_server));
 
     // Always need MPRIS2
-    let connection = plugins::mpris2::start(mpd_state_server.clone()).await?;
+    let (connection, _notifier_task) = plugins::mpris2::start(mpd_state_server.clone()).await?;
 
     // Set up notification relay, if requested
     if !args.no_notification {
         info!("Notification enabled, starting notification sender...");
-        plugins::fdo_notification::start(&connection, mpd_state_server.clone()).await?;
+        let _notification_task =
+            plugins::fdo_notification::start(&connection, mpd_state_server.clone()).await?;
     }
 
     // Broadcast MPD server state change
-    mpd_state_server.lock().await.ready().await?;
+    mpd_state_server.lock().ready().await?;
 
     // Now everything is set-up, wait for an exit signal
     info!("Service started.");

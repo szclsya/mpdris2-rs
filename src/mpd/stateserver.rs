@@ -3,22 +3,24 @@ use crate::types::PlayerStateChange;
 
 use anyhow::{bail, format_err, Result};
 use async_broadcast::{broadcast, InactiveReceiver, Receiver, Sender};
-use async_std::{
+use async_dup::{Arc, Mutex};
+use log::{debug, error};
+use smol::{
     fs,
     fs::File,
-    io::{BufWriter, WriteExt},
-    path::PathBuf,
-    sync::{Arc, Mutex, RwLock},
-    task,
+    io::{AsyncWriteExt, BufWriter},
+    lock::RwLock,
+    spawn, Task, Timer,
 };
-use log::{debug, error};
-use std::{mem::discriminant, time::Duration};
+use std::{mem::discriminant, path::PathBuf, time::Duration};
 
 const IDLE_CMD: &str = "idle stored_playlist playlist player mixer options";
 const PING_INTERVAL: Duration = Duration::from_secs(55);
 
 pub struct MpdStateServer {
     query_client: Arc<Mutex<MpdClient>>,
+    _ping_task: Task<()>,
+    _idle_task: Task<()>,
 
     mpris_event_tx: Sender<PlayerStateChange>,
     _mpris_event_rx: InactiveReceiver<PlayerStateChange>,
@@ -42,15 +44,15 @@ impl MpdStateServer {
         // Regularly ping to maintain connection
         let query_client = Arc::new(Mutex::new(query_client));
         let qc2 = query_client.clone();
-        task::spawn(async move {
+        let _ping_task = spawn(async move {
             loop {
-                let mut client = qc2.lock().await;
+                let mut client = qc2.lock();
                 if let Err(e) = client.issue_command("ping").await {
                     error!("ping failed: {}", e);
                     client.reconnect_until_success().await;
                 }
                 drop(client);
-                task::sleep(PING_INTERVAL).await;
+                Timer::after(PING_INTERVAL).await;
             }
         });
 
@@ -60,7 +62,7 @@ impl MpdStateServer {
         let mut idle_client = MpdClient::new(address, port).await?;
         let s2 = state.clone();
         let tx = mpris_event_tx.clone();
-        task::spawn(async move {
+        let _idle_task = spawn(async move {
             loop {
                 let res = idle(&mut idle_client, &s2, &tx).await;
                 if let Err(e) = res {
@@ -72,6 +74,9 @@ impl MpdStateServer {
 
         let res = MpdStateServer {
             query_client,
+            _ping_task,
+            _idle_task,
+
             mpris_event_tx,
             _mpris_event_rx: mpris_event_rx,
             state,
@@ -88,13 +93,13 @@ impl MpdStateServer {
     }
 
     pub async fn update_status(&mut self) -> Result<()> {
-        let mut c = self.query_client.lock().await;
+        let mut c = self.query_client.lock();
         update_status(&mut c, &self.state, &self.mpris_event_tx).await?;
         Ok(())
     }
 
     pub async fn issue_command(&self, cmd: &str) -> Result<types::MpdResponse> {
-        let mut client = self.query_client.lock().await;
+        let mut client = self.query_client.lock();
         let resp = client.issue_command(cmd).await;
         match resp {
             Ok(resp) => Ok(resp),
@@ -109,7 +114,7 @@ impl MpdStateServer {
     pub async fn ready(&self) -> Result<()> {
         use PlayerStateChange::*;
 
-        let mut client = self.query_client.lock().await;
+        let mut client = self.query_client.lock();
         let tx = &self.mpris_event_tx;
         update_status(&mut client, &self.state, tx).await?;
 
@@ -168,7 +173,7 @@ async fn update_status(
             Ok(new_path) => {
                 new.album_art = Some(new_path);
                 if let Some(path) = &old.album_art {
-                    if path.is_file().await {
+                    if path.is_file() {
                         fs::remove_file(path).await?;
                     }
                 }
@@ -180,7 +185,7 @@ async fn update_status(
     } else if new.song.is_some() {
         new.album_art = old.album_art.clone();
     } else if let Some(path) = old.album_art {
-        if path.is_file().await {
+        if path.is_file() {
             fs::remove_file(path).await?;
         }
     }
@@ -224,15 +229,16 @@ pub async fn update_album_art(c: &mut MpdClient) -> Result<PathBuf> {
         None => bail!("invalid MPD response: no current song ID"),
     };
     let pic_dir = match dirs::runtime_dir() {
-        Some(path) => PathBuf::from(path),
+        Some(path) => path,
         None => PathBuf::from("/tmp"),
-    }.join("mpd/album_art/");
+    }
+    .join("mpd/album_art/");
 
-    if !pic_dir.is_dir().await {
-        async_std::fs::create_dir_all(&pic_dir).await?;
+    if !pic_dir.is_dir() {
+        fs::create_dir_all(&pic_dir).await?;
     }
     let pic_path = pic_dir.join(id);
-    if pic_path.is_file().await {
+    if pic_path.is_file() {
         fs::remove_file(&pic_path).await?;
     }
     let mut pic_file = BufWriter::new(File::create(&pic_path).await?);

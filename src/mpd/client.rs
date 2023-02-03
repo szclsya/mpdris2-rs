@@ -2,12 +2,13 @@
 use super::{parse_error_line, parse_line, types::MpdResponse};
 
 use anyhow::{bail, Context, Result};
-use async_std::{
+use log::{debug, error, info};
+use smol::{
     io::{BufReader, BufWriter},
     net::TcpStream,
     prelude::*,
+    Timer,
 };
-use log::{debug, error, info};
 
 pub struct MpdClient {
     reader: BufReader<TcpStream>,
@@ -66,7 +67,8 @@ impl MpdClient {
                     } else {
                         debug!("Reconnect failed");
                     }
-                    async_std::task::sleep(crate::RETRY_INTERVAL).await;
+
+                    Timer::after(crate::RETRY_INTERVAL).await;
                 }
             }
         }

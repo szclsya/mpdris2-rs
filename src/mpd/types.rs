@@ -1,5 +1,5 @@
 use anyhow::{bail, Result};
-use async_std::path::PathBuf;
+use std::path::PathBuf;
 use std::{collections::HashMap, fmt::Display, time::Duration};
 
 // A list of fields + optional binary data
@@ -102,10 +102,7 @@ impl MpdState {
                 None
             };
 
-            let playing_state = MpdPlayingState {
-                elapsed,
-                duration,
-            };
+            let playing_state = MpdPlayingState { elapsed, duration };
             if state == "play" {
                 MpdPlaybackState::Playing(playing_state)
             } else {
