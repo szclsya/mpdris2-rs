@@ -54,11 +54,14 @@ async fn try_main() -> Result<()> {
     let (connection, _notifier_task) = plugins::mpris2::start(mpd_state_server.clone()).await?;
 
     // Set up notification relay, if requested
-    if !args.no_notification {
+    let _notification_task = if !args.no_notification {
         info!("Notification enabled, starting notification sender...");
-        let _notification_task =
-            plugins::fdo_notification::start(&connection, mpd_state_server.clone()).await?;
-    }
+        let task = plugins::fdo_notification::start(&connection, mpd_state_server.clone()).await?;
+        Some(task)
+    } else {
+        info!("Notification disabled.");
+        None
+    };
 
     // Broadcast MPD server state change
     mpd_state_server.lock().ready().await?;
