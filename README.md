@@ -10,6 +10,8 @@ To build, clone this repository, and run `cargo build --release`. The MSRV (mini
 If using Linux with systemd, you can use systemd user service to run mpdris2-rs. Copy the result binary (`target/release/mpdris2-rs`) to `/usr/local/bin`, add [mpdris2-rs.service](misc/mpdris2-rs.service) to `~/.config/systemd/user` and run `systemctl --user enable mpdris2-rs.service`.
 
 ## Configuration
+This program reads the D-Bus session bus path from `$DBUS_SESSION_BUS_ADDRESS` and fall back to `$XDG_RUNTIME_DIR/bus` if such variable is not defined. Usually this variable should be set automatically when using desktop environments like KDE and GNOME, but if you are using a window manager or launching DE session by yourself, you might need to start your graphical session with `dbus-launch --exit-with-session $CMD`.
+
 Currently the following command line arguments are supported:
 - `--host $MPD_HOST` hostname of MPD server
 - `--port $MPD_PORT` port of MPD server
