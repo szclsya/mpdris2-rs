@@ -13,18 +13,20 @@ use player::PlayerInterface;
 use root::RootInterface;
 use tracklist::TracklistInterface;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use async_dup::{Arc, Mutex};
 use log::error;
 use smol::{spawn, Task};
 use zbus::{Connection, ConnectionBuilder};
 
-pub async fn start(mpd_state_server: Arc<Mutex<MpdStateServer>>) -> Result<(Connection, Task<()>)> {
+pub async fn start(
+    mpd_state_server: Arc<Mutex<MpdStateServer>>,
+) -> Result<(Connection, Task<()>)> {
     let root_interface = RootInterface::default();
     let player_interface = PlayerInterface::new(mpd_state_server.clone()).await;
     let tracklist_interface = TracklistInterface::new(mpd_state_server.clone());
 
-    let connection = ConnectionBuilder::session()?
+    let connection = ConnectionBuilder::session().context("Failed to connect to D-Bus session bus. Is $DBUS_SESSION_BUS_ADDRESS set to the correct address?")?
         .name(BUS_NAME)?
         .serve_at(OBJECT_PATH, root_interface)?
         .serve_at(OBJECT_PATH, player_interface)?
