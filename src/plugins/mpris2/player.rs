@@ -2,10 +2,9 @@ use super::utils::*;
 /// Player interface (org.mpris.MediaPlayer2.Player) implementation
 use crate::mpd::{types::*, MpdStateServer};
 
-use async_dup::{Arc, Mutex};
 use log::{debug, error};
-use smol::lock::RwLock;
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
+use tokio::sync::{Mutex, RwLock};
 use zbus::{dbus_interface, SignalContext};
 use zvariant::{ObjectPath, Value};
 
@@ -17,7 +16,7 @@ pub struct PlayerInterface {
 impl PlayerInterface {
     pub async fn new(mpdclient: Arc<Mutex<MpdStateServer>>) -> Self {
         PlayerInterface {
-            mpd_state: mpdclient.clone().lock().get_status(),
+            mpd_state: mpdclient.clone().lock().await.get_status(),
             mpdclient,
         }
     }
@@ -27,7 +26,7 @@ impl PlayerInterface {
 impl PlayerInterface {
     #[dbus_interface(name = "Play")]
     async fn play(&self, #[zbus(signal_context)] ctxt: SignalContext<'_>) {
-        let mut client = self.mpdclient.lock();
+        let mut client = self.mpdclient.lock().await;
         match client.issue_command("play").await {
             Ok(_) => {
                 PlayerInterface::playback_status_changed(self, &ctxt)
@@ -43,7 +42,7 @@ impl PlayerInterface {
 
     #[dbus_interface(name = "Pause")]
     async fn pause(&self, #[zbus(signal_context)] ctxt: SignalContext<'_>) {
-        match self.mpdclient.lock().issue_command("pause 1").await {
+        match self.mpdclient.lock().await.issue_command("pause 1").await {
             Ok(_) => {
                 PlayerInterface::playback_status_changed(self, &ctxt)
                     .await
@@ -57,7 +56,7 @@ impl PlayerInterface {
 
     #[dbus_interface(name = "PlayPause")]
     async fn play_pause(&self, #[zbus(signal_context)] ctxt: SignalContext<'_>) {
-        match self.mpdclient.lock().issue_command("pause").await {
+        match self.mpdclient.lock().await.issue_command("pause").await {
             Ok(_) => {
                 PlayerInterface::playback_status_changed(self, &ctxt)
                     .await
@@ -71,7 +70,7 @@ impl PlayerInterface {
 
     #[dbus_interface(name = "Next")]
     async fn next(&self) {
-        self.mpdclient.lock().issue_command("next").await.ok();
+        self.mpdclient.lock().await.issue_command("next").await.ok();
     }
 
     #[dbus_interface(name = "Previous")]
@@ -86,7 +85,7 @@ impl PlayerInterface {
             }
         }
 
-        match self.mpdclient.lock().issue_command(cmd).await {
+        match self.mpdclient.lock().await.issue_command(cmd).await {
             Ok(_) => {
                 if cmd == "seekcur 0" {
                     PlayerInterface::seeked(&ctxt, 0).await.ok();
@@ -100,7 +99,7 @@ impl PlayerInterface {
 
     #[dbus_interface(name = "Stop")]
     async fn stop(&self) {
-        self.mpdclient.lock().issue_command("stop").await.ok();
+        self.mpdclient.lock().await.issue_command("stop").await.ok();
     }
 
     #[dbus_interface(name = "Seek")]
@@ -108,7 +107,7 @@ impl PlayerInterface {
         let symbol = if ms > 0 { '+' } else { '-' };
         let t = Duration::from_micros(ms.unsigned_abs());
         let cmd = format!("seekcur {symbol}{}", t.as_secs());
-        if let Err(e) = self.mpdclient.lock().issue_command(&cmd).await {
+        if let Err(e) = self.mpdclient.lock().await.issue_command(&cmd).await {
             error!("org.mpris.MediaPlayer2.Player.Seek failed: {}", e);
         } else {
             PlayerInterface::seeked(&ctxt, ms).await.ok();
@@ -130,7 +129,7 @@ impl PlayerInterface {
         if song == object_path_to_id(&track_id) {
             let pos = Duration::from_micros(position as u64);
             let cmd = format!("seekcur {}", pos.as_secs());
-            if let Err(e) = self.mpdclient.lock().issue_command(&cmd).await {
+            if let Err(e) = self.mpdclient.lock().await.issue_command(&cmd).await {
                 error!("org.mpris.MediaPlayer2.Player.SetPosition failed: {}", e);
             } else {
                 PlayerInterface::seeked(&ctxt, position).await.ok();
@@ -143,7 +142,7 @@ impl PlayerInterface {
     #[dbus_interface(name = "OpenUri")]
     async fn open_uri(&self, uri: &str) {
         let cmd = format!("add {}", uri);
-        self.mpdclient.lock().issue_command(&cmd).await.ok();
+        self.mpdclient.lock().await.issue_command(&cmd).await.ok();
     }
 
     #[dbus_interface(property, name = "PlaybackStatus")]
@@ -164,7 +163,7 @@ impl PlayerInterface {
             MpdLoopState::Playlist => ["repeat 1", "single 0"],
         };
         for cmd in commands {
-            self.mpdclient.lock().issue_command(cmd).await.ok();
+            self.mpdclient.lock().await.issue_command(cmd).await.ok();
         }
     }
 
@@ -184,7 +183,7 @@ impl PlayerInterface {
     #[dbus_interface(property, name = "Shuffle")]
     async fn set_shuffle(&self, shuffle: bool) {
         let cmd = if shuffle { "random 1" } else { "random 0" };
-        self.mpdclient.lock().issue_command(cmd).await.ok();
+        self.mpdclient.lock().await.issue_command(cmd).await.ok();
     }
 
     #[dbus_interface(property, name = "Metadata")]
@@ -229,14 +228,14 @@ impl PlayerInterface {
         }
         let volume = volume as u64;
         let cmd = format!("volume {volume}");
-        self.mpdclient.lock().issue_command(&cmd).await.ok();
+        self.mpdclient.lock().await.issue_command(&cmd).await.ok();
     }
 
     #[dbus_interface(property, name = "Position")]
     async fn position(&self) -> i64 {
         use MpdPlaybackState::*;
 
-        self.mpdclient.lock().update_status().await.ok();
+        self.mpdclient.lock().await.update_status().await.ok();
         let elapsed = match &self.mpd_state.read().await.playback_state {
             Playing(s) | Paused(s) => {
                 if let Some(elapsed) = s.elapsed {

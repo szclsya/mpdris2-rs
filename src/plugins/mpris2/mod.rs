@@ -14,14 +14,14 @@ use root::RootInterface;
 use tracklist::TracklistInterface;
 
 use anyhow::{Context, Result};
-use async_dup::{Arc, Mutex};
 use log::error;
-use smol::{spawn, Task};
+use std::sync::Arc;
+use tokio::{spawn, sync::Mutex, task::JoinHandle};
 use zbus::{Connection, ConnectionBuilder};
 
 pub async fn start(
     mpd_state_server: Arc<Mutex<MpdStateServer>>,
-) -> Result<(Connection, Task<()>)> {
+) -> Result<(Connection, JoinHandle<()>)> {
     let root_interface = RootInterface::default();
     let player_interface = PlayerInterface::new(mpd_state_server.clone()).await;
     let tracklist_interface = TracklistInterface::new(mpd_state_server.clone());
@@ -36,7 +36,7 @@ pub async fn start(
 
     let connection2 = connection.clone();
     let client = mpd_state_server.clone();
-    let mut rx = mpd_state_server.lock().get_mpris_event_rx();
+    let mut rx = mpd_state_server.lock().await.get_mpd_event_rx();
 
     let notifier = spawn(async move {
         loop {

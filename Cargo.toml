@@ -8,11 +8,10 @@ license = "GPL-3.0-or-later"
 [dependencies]
 anyhow = "1"
 thiserror = "1"
-smol = "1"
-async-broadcast = "0.5"
-async-dup = "1"
+tokio = { version = "1", features = ["rt", "sync", "time", "io-util"]}
+futures-util = "0.3"
 # Commuicating with D-Bus
-zbus = "3"
+zbus = { version = "3", default-features = false, features = ["tokio"] }
 zvariant = "3"
 serde = "1"
 # Parsing MPD protocol
@@ -23,9 +22,9 @@ colored = "2"
 fern = { version = "0.6", features = ["colored"] }
 # Signal processing
 signal-hook = "0.3"
-signal-hook-async-std = "0.2"
+signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }
 # Config
-clap = { version = "4", features = ["derive"]}
+argh = "0.1"
 dirs = "5"
 
 [profile.release]

@@ -1,20 +1,20 @@
 /// The configuration file format
-use clap::{ArgAction, Parser};
+//use clap::{ArgAction, Parser};
+use argh::FromArgs;
 
-#[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None)]
+#[derive(FromArgs, Debug)]
 /// A daemon to expose MPRIS V2.1 D-Bus interface for mpd
 pub struct Args {
-    /// Address of MPD server (Default: localhost)
-    #[clap(action, long, default_value = "localhost")]
+    /// address of MPD server (Default: localhost)
+    #[argh(option, default = "String::from(\"localhost\")")]
     pub host: String,
-    /// Port of MPD server (Default: 6600)
-    #[clap(action, long, default_value = "6600")]
+    /// port of MPD server (Default: 6600)
+    #[argh(option, default = "6600")]
     pub port: u32,
-    /// Disable notification
-    #[clap(action, long)]
+    /// disable notification
+    #[argh(switch)]
     pub no_notification: bool,
-    /// Verbosity
-    #[clap(action(ArgAction::Count), short)]
+    /// verbose
+    #[argh(switch, short = 'v')]
     pub verbose: u8,
 }

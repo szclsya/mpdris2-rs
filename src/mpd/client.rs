@@ -3,16 +3,18 @@ use super::{parse_error_line, parse_line, types::MpdResponse};
 
 use anyhow::{bail, Context, Result};
 use log::{debug, error, info};
-use smol::{
-    io::{BufReader, BufWriter},
-    net::TcpStream,
-    prelude::*,
-    Timer,
+use tokio::{
+    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
+    net::{
+        tcp::{OwnedReadHalf, OwnedWriteHalf},
+        TcpStream,
+    },
+    time::sleep,
 };
 
 pub struct MpdClient {
-    reader: BufReader<TcpStream>,
-    writer: BufWriter<TcpStream>,
+    reader: BufReader<OwnedReadHalf>,
+    writer: BufWriter<OwnedWriteHalf>,
 
     // MPD info
     ip: String,
@@ -24,9 +26,9 @@ impl MpdClient {
         let stream = TcpStream::connect(format!("{}:{}", ip, port))
             .await
             .context(format!("Cannot connect to MPD server at {ip}:{port}"))?;
-        let mut reader = BufReader::new(stream.clone());
-        let writer = BufWriter::new(stream);
-
+        let (r, w) = stream.into_split();
+        let mut reader = BufReader::new(r);
+        let writer = BufWriter::new(w);
         // Read version info
         let mut hello = String::new();
         reader.read_line(&mut hello).await?;
@@ -40,9 +42,15 @@ impl MpdClient {
     }
 
     async fn reconnect(&mut self) -> Result<()> {
-        let stream = TcpStream::connect(format!("{}:{}", self.ip, self.port)).await?;
-        self.reader = BufReader::new(stream.clone());
-        self.writer = BufWriter::new(stream);
+        let stream = TcpStream::connect(format!("{}:{}", self.ip, self.port))
+            .await
+            .context(format!(
+                "Cannot reconnect to MPD server at {}:{}",
+                self.ip, self.port
+            ))?;
+        let (r, w) = stream.into_split();
+        self.reader = BufReader::new(r);
+        self.writer = BufWriter::new(w);
 
         let mut hello = String::new();
         self.reader.read_line(&mut hello).await?;
@@ -68,7 +76,7 @@ impl MpdClient {
                         debug!("Reconnect failed");
                     }
 
-                    Timer::after(crate::RETRY_INTERVAL).await;
+                    sleep(crate::RETRY_INTERVAL).await;
                 }
             }
         }
@@ -90,7 +98,7 @@ impl MpdClient {
     }
 }
 
-async fn read_response(r: &mut BufReader<TcpStream>) -> Result<MpdResponse> {
+async fn read_response(r: &mut BufReader<OwnedReadHalf>) -> Result<MpdResponse> {
     let mut fields: Vec<(String, String)> = Vec::new();
     let mut binary: Option<Vec<u8>> = None;
 
@@ -113,8 +121,8 @@ async fn read_response(r: &mut BufReader<TcpStream>) -> Result<MpdResponse> {
         if name == "binary" {
             // We are receiving a binary chunk
             let len: u64 = value.parse()?;
-            let mut res = Vec::with_capacity(len as usize);
-            r.take(len).read_to_end(&mut res).await?;
+            let mut res = vec![0u8; len as usize];
+            r.read_exact(res.as_mut_slice()).await?;
             binary = Some(res);
             // Read newline
             let mut newline = [0];

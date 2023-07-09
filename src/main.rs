@@ -6,21 +6,28 @@ mod types;
 const RETRY_INTERVAL: Duration = Duration::from_secs(5);
 
 use anyhow::Result;
-use async_dup::{Arc, Mutex};
-use clap::Parser;
 use colored::Colorize;
 use fern::colors::{Color, ColoredLevelConfig};
+use futures_util::stream::StreamExt;
 use log::{debug, error, info};
 use signal_hook::consts::signal::{SIGINT, SIGQUIT, SIGTERM};
-use signal_hook_async_std::Signals;
-use smol::stream::StreamExt;
-use std::time::Duration;
+use signal_hook_tokio::Signals;
+use std::{sync::Arc, time::Duration};
+use tokio::{runtime, sync::Mutex, time::sleep};
 
 fn main() {
-    // We don't really need multiple worker thread to pass some music info
-    std::env::set_var("ASYNC_STD_THREAD_COUNT", "1");
-
-    if let Err(err) = smol::block_on(try_main()) {
+    let rt = match runtime::Builder::new_current_thread()
+        .enable_io()
+        .enable_time()
+        .build()
+    {
+        Ok(rt) => rt,
+        Err(e) => {
+            error!("Cannot initialize tokio runtime: {e}");
+            std::process::exit(1);
+        }
+    };
+    if let Err(err) = rt.block_on(try_main()) {
         println!("{:>6} {err}", "ERROR".red());
         err.chain().skip(1).for_each(|cause| {
             println!("{} {}", "DUE TO".yellow(), cause);
@@ -29,7 +36,7 @@ fn main() {
 }
 
 async fn try_main() -> Result<()> {
-    let args = config::Args::parse();
+    let args: config::Args = argh::from_env();
     setup_logger(args.verbose)?;
 
     let mut first_retry = true;
@@ -43,7 +50,7 @@ async fn try_main() -> Result<()> {
                 } else {
                     debug!("Retry failed.");
                 }
-                smol::Timer::after(RETRY_INTERVAL).await;
+                sleep(RETRY_INTERVAL).await;
             }
         }
     };
@@ -64,7 +71,7 @@ async fn try_main() -> Result<()> {
     };
 
     // Broadcast MPD server state change
-    mpd_state_server.lock().ready().await?;
+    mpd_state_server.lock().await.ready().await?;
 
     // Now everything is set-up, wait for an exit signal
     info!("Service started.");

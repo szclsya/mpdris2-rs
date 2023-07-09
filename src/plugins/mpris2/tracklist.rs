@@ -2,9 +2,9 @@ use super::utils::*;
 /// `TrackList` interface (org.mpris.MediaPlayer2.TrackList) implementation
 use crate::mpd::MpdStateServer;
 
-use async_dup::{Arc, Mutex};
 use log::error;
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::Mutex;
 use zbus::{dbus_interface, SignalContext};
 use zvariant::{ObjectPath, Value};
 
@@ -65,7 +65,7 @@ impl<'a> TracklistInterface {
         };
 
         let cmd = format!("playid {}", id);
-        match self.mpdclient.lock().issue_command(&cmd).await {
+        match self.mpdclient.lock().await.issue_command(&cmd).await {
             Ok(_resp) => {
                 let mut new_metadata = self.get_track_metadata(vec![track.clone()]).await?;
                 let new_metadata = new_metadata.remove(0);
@@ -108,7 +108,7 @@ impl<'a> TracklistInterface {
 
     #[dbus_interface(property, name = "Tracks")]
     async fn tracks(&self) -> Vec<ObjectPath<'_>> {
-        let client = self.mpdclient.lock();
+        let client = self.mpdclient.lock().await;
         let resp = match client.issue_command("playlistinfo").await {
             Ok(resp) => resp,
             Err(e) => {
@@ -139,6 +139,7 @@ pub async fn get_current_playlist<'a>(
 ) -> zbus::fdo::Result<Vec<HashMap<std::string::String, zvariant::Value<'a>>>> {
     let res = client
         .lock()
+        .await
         .issue_command("playlistinfo")
         .await
         .map_err(to_fdo_err)?;

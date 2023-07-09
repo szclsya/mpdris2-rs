@@ -2,28 +2,28 @@ use super::{types, types::MpdState, MpdClient};
 use crate::types::PlayerStateChange;
 
 use anyhow::{bail, format_err, Result};
-use async_broadcast::{broadcast, InactiveReceiver, Receiver, Sender};
-use async_dup::{Arc, Mutex};
 use log::{debug, error};
-use smol::{
+use std::{mem::discriminant, path::PathBuf, sync::Arc, time::Duration};
+use tokio::{
     fs,
     fs::File,
     io::{AsyncWriteExt, BufWriter},
-    lock::RwLock,
-    spawn, Task, Timer,
+    spawn,
+    sync::broadcast::{channel, Receiver, Sender},
+    sync::{Mutex, RwLock},
+    task,
+    time::sleep,
 };
-use std::{mem::discriminant, path::PathBuf, time::Duration};
 
 const IDLE_CMD: &str = "idle stored_playlist playlist player mixer options";
 const PING_INTERVAL: Duration = Duration::from_secs(55);
 
 pub struct MpdStateServer {
     query_client: Arc<Mutex<MpdClient>>,
-    _ping_task: Task<()>,
-    _idle_task: Task<()>,
+    _ping_task: task::JoinHandle<()>,
+    _idle_task: task::JoinHandle<()>,
 
-    mpris_event_tx: Sender<PlayerStateChange>,
-    _mpris_event_rx: InactiveReceiver<PlayerStateChange>,
+    mpd_event_tx: Sender<PlayerStateChange>,
 
     // State caches
     state: Arc<RwLock<types::MpdState>>,
@@ -46,22 +46,21 @@ impl MpdStateServer {
         let qc2 = query_client.clone();
         let _ping_task = spawn(async move {
             loop {
-                let mut client = qc2.lock();
+                let mut client = qc2.lock().await;
                 if let Err(e) = client.issue_command("ping").await {
                     error!("ping failed: {}", e);
                     client.reconnect_until_success().await;
                 }
                 drop(client);
-                Timer::after(PING_INTERVAL).await;
+                sleep(PING_INTERVAL).await;
             }
         });
 
         // Create a client that receive MPD state change
-        let (mpris_event_tx, mpris_event_rx) = broadcast(50);
-        let mpris_event_rx = mpris_event_rx.deactivate();
+        let (mpd_event_tx, _) = channel(50);
         let mut idle_client = MpdClient::new(address, port).await?;
         let s2 = state.clone();
-        let tx = mpris_event_tx.clone();
+        let tx = mpd_event_tx.clone();
         let _idle_task = spawn(async move {
             loop {
                 let res = idle(&mut idle_client, &s2, &tx).await;
@@ -77,15 +76,14 @@ impl MpdStateServer {
             _ping_task,
             _idle_task,
 
-            mpris_event_tx,
-            _mpris_event_rx: mpris_event_rx,
+            mpd_event_tx,
             state,
         };
         Ok(res)
     }
 
-    pub fn get_mpris_event_rx(&self) -> Receiver<PlayerStateChange> {
-        self.mpris_event_tx.new_receiver()
+    pub fn get_mpd_event_rx(&self) -> Receiver<PlayerStateChange> {
+        self.mpd_event_tx.subscribe()
     }
 
     pub fn get_status(&self) -> Arc<RwLock<MpdState>> {
@@ -93,13 +91,13 @@ impl MpdStateServer {
     }
 
     pub async fn update_status(&mut self) -> Result<()> {
-        let mut c = self.query_client.lock();
-        update_status(&mut c, &self.state, &self.mpris_event_tx).await?;
+        let mut c = self.query_client.lock().await;
+        update_status(&mut c, &self.state, &self.mpd_event_tx).await?;
         Ok(())
     }
 
     pub async fn issue_command(&self, cmd: &str) -> Result<types::MpdResponse> {
-        let mut client = self.query_client.lock();
+        let mut client = self.query_client.lock().await;
         let resp = client.issue_command(cmd).await;
         match resp {
             Ok(resp) => Ok(resp),
@@ -114,17 +112,17 @@ impl MpdStateServer {
     pub async fn ready(&self) -> Result<()> {
         use PlayerStateChange::*;
 
-        let mut client = self.query_client.lock();
-        let tx = &self.mpris_event_tx;
+        let mut client = self.query_client.lock().await;
+        let tx = &self.mpd_event_tx;
         update_status(&mut client, &self.state, tx).await?;
 
-        tx.broadcast(Playback).await?;
-        tx.broadcast(Loop).await?;
-        tx.broadcast(Shuffle).await?;
-        tx.broadcast(Volume).await?;
-        tx.broadcast(Song).await?;
-        tx.broadcast(NextSong).await?;
-        tx.broadcast(Tracklist).await?;
+        tx.send(Playback)?;
+        tx.send(Loop)?;
+        tx.send(Shuffle)?;
+        tx.send(Volume)?;
+        tx.send(Song)?;
+        tx.send(NextSong)?;
+        tx.send(Tracklist)?;
         Ok(())
     }
 }
@@ -143,7 +141,7 @@ async fn idle(
             match field.as_str() {
                 "stored_playlist" => (),
                 "playlist" => {
-                    tx.broadcast(PlayerStateChange::Tracklist).await?;
+                    tx.send(PlayerStateChange::Tracklist)?;
                 }
                 "player" | "mixer" | "options" => update_status(c, state, tx).await?,
                 _ => (),
@@ -196,22 +194,22 @@ async fn update_status(
     // Compare && send state changes
     let new = state.read().await;
     if discriminant(&new.playback_state) != discriminant(&old.playback_state) {
-        tx.broadcast(PlayerStateChange::Playback).await?;
+        tx.send(PlayerStateChange::Playback)?;
     }
     if new.loop_state != old.loop_state {
-        tx.broadcast(PlayerStateChange::Loop).await?;
+        tx.send(PlayerStateChange::Loop)?;
     }
     if new.random != old.random {
-        tx.broadcast(PlayerStateChange::Shuffle).await?;
+        tx.send(PlayerStateChange::Shuffle)?;
     }
     if new.song != old.song {
-        tx.broadcast(PlayerStateChange::Song).await?;
+        tx.send(PlayerStateChange::Song)?;
     }
     if new.next_song != old.next_song {
-        tx.broadcast(PlayerStateChange::NextSong).await?;
+        tx.send(PlayerStateChange::NextSong)?;
     }
     if new.volume != old.volume {
-        tx.broadcast(PlayerStateChange::Volume).await?;
+        tx.send(PlayerStateChange::Volume)?;
     }
 
     Ok(())

@@ -7,11 +7,16 @@ use crate::mpd::{
 use crate::types::PlayerStateChange;
 
 use anyhow::Result;
-use async_broadcast::Receiver;
-use async_dup::{Arc, Mutex};
 use log::{debug, error};
-use smol::{lock::RwLock, spawn, Task, Timer};
 use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::{
+    spawn,
+    sync::broadcast::Receiver,
+    sync::{Mutex, RwLock},
+    task::JoinHandle,
+    time::sleep,
+};
 use zbus::{dbus_proxy, Connection};
 use zvariant::Value;
 
@@ -36,7 +41,7 @@ trait Notifications {
 
 pub struct FdoNotificationRelay<'a> {
     proxy: NotificationsProxy<'a>,
-    mpris_event_rx: Receiver<PlayerStateChange>,
+    mpd_event_rx: Receiver<PlayerStateChange>,
     state: Arc<RwLock<MpdState>>,
 
     // Settings
@@ -52,15 +57,15 @@ impl<'a> FdoNotificationRelay<'a> {
         client: Arc<Mutex<MpdStateServer>>,
     ) -> Result<FdoNotificationRelay<'a>> {
         let proxy = NotificationsProxy::new(connection).await?;
-        let client = client.lock();
-        let mpris_event_rx = client.get_mpris_event_rx();
+        let client = client.lock().await;
+        let mpd_event_rx = client.get_mpd_event_rx();
         let state = client.get_status();
         let mut hints = HashMap::new();
         hints.insert("urgency", Value::from(0));
 
         let res = FdoNotificationRelay {
             proxy,
-            mpris_event_rx,
+            mpd_event_rx,
             state,
             mpd_icon: DEFAULT_MPD_ICON_PATH.to_owned(),
             notification_timeout: 5000,
@@ -75,7 +80,7 @@ impl<'a> FdoNotificationRelay<'a> {
         use PlayerStateChange::*;
         loop {
             debug!("Waiting for MPD state change from NotificationRelay...");
-            let event = self.mpris_event_rx.recv().await?;
+            let event = self.mpd_event_rx.recv().await?;
             match event {
                 Playback | Song => {
                     self.send_notification().await?;
@@ -137,13 +142,13 @@ impl<'a> FdoNotificationRelay<'a> {
 pub async fn start(
     connection: &Connection,
     mpdclient: Arc<Mutex<MpdStateServer>>,
-) -> Result<Task<()>> {
+) -> Result<JoinHandle<()>> {
     let mut notification_relay = FdoNotificationRelay::new(connection, mpdclient).await?;
     let task = spawn(async move {
         loop {
             if let Err(e) = notification_relay.send_notification_on_event().await {
                 error!("NotificationRelay dead, restarting. Reason: {e}");
-                Timer::after(crate::RETRY_INTERVAL).await;
+                sleep(crate::RETRY_INTERVAL).await;
             }
         }
     });
