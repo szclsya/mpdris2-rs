@@ -5,7 +5,7 @@ A lightweight implementation of MPD to D-Bus bridge, which exposes MPD player an
 ## Installation
 If you are using Arch Linux, mpdris2-rs is available on [AUR](https://aur.archlinux.org/packages/mpdris2-rs).
 
-To build, clone this repository, and run `cargo build --release`. The MSRV (minimum supported Rust version) is **1.59.0**.
+To build, clone this repository, and run `cargo build --release`. The MSRV (minimum supported Rust version) is **1.64.0**.
 
 If using Linux with systemd, you can use systemd user service to run mpdris2-rs. Copy the result binary (`target/release/mpdris2-rs`) to `/usr/local/bin`, add [mpdris2-rs.service](misc/mpdris2-rs.service) to `~/.config/systemd/user` and run `systemctl --user enable mpdris2-rs.service`.
 
