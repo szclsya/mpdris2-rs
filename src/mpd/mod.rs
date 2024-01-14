@@ -1,6 +1,5 @@
 mod parser;
 use parser::{parse_error_line, parse_line};
-pub use parser::{MpdError, MpdErrorType};
 
 pub mod types;
 
