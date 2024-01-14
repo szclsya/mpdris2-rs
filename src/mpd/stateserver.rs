@@ -288,7 +288,7 @@ pub async fn update_album_art(c: &mut MpdClient) -> Result<PathBuf> {
                 offset += binary_size.parse::<u64>()?;
                 loop {
                     // Read the remaining parts
-                    let cmd = format!("albumart {uri} {offset}");
+                    let cmd = format!("albumart \"{uri}\" {offset}");
                     let resp = c.issue_command(&cmd).await?;
                     let size: u64 = fields
                         .get("size")
