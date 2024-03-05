@@ -5,7 +5,7 @@ use crate::mpd::MpdStateServer;
 use log::error;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
-use zbus::{dbus_interface, SignalContext};
+use zbus::{interface, SignalContext};
 use zvariant::{ObjectPath, Value};
 
 pub struct TracklistInterface {
@@ -18,9 +18,9 @@ impl TracklistInterface {
     }
 }
 
-#[dbus_interface(name = "org.mpris.MediaPlayer2.TrackList")]
+#[interface(name = "org.mpris.MediaPlayer2.TrackList")]
 impl<'a> TracklistInterface {
-    #[dbus_interface(name = "GetTracksMetadata")]
+    #[zbus(name = "GetTracksMetadata")]
     async fn get_track_metadata(
         &self,
         tracks: Vec<ObjectPath<'_>>,
@@ -42,17 +42,17 @@ impl<'a> TracklistInterface {
         Ok(metadatas)
     }
 
-    #[dbus_interface(name = "AddTrack")]
+    #[zbus(name = "AddTrack")]
     async fn add_track(&self, _uri: String, _after: ObjectPath<'_>, _set_as_current: bool) {
         // We don't do that here.jpg
     }
 
-    #[dbus_interface(name = "RemoveTrack")]
+    #[zbus(name = "RemoveTrack")]
     async fn remove_track(&self, _track: ObjectPath<'_>) {
         // We don't do that here either
     }
 
-    #[dbus_interface(name = "GoTo")]
+    #[zbus(name = "GoTo")]
     async fn goto(
         &self,
         #[zbus(signal_context)] ctxt: SignalContext<'_>,
@@ -80,7 +80,7 @@ impl<'a> TracklistInterface {
         Ok(())
     }
 
-    #[dbus_interface(signal, name = "TrackListReplaced")]
+    #[zbus(signal, name = "TrackListReplaced")]
     pub async fn track_list_replaced(
         ctxt: &SignalContext<'_>,
         tracks: Vec<ObjectPath<'_>>,
@@ -88,7 +88,7 @@ impl<'a> TracklistInterface {
     ) -> zbus::Result<()>;
 
     #[allow(dead_code)]
-    #[dbus_interface(signal, name = "TrackAdded")]
+    #[zbus(signal, name = "TrackAdded")]
     async fn track_added(
         ctxt: &SignalContext<'_>,
         metadata: HashMap<String, Value<'_>>,
@@ -96,17 +96,17 @@ impl<'a> TracklistInterface {
     ) -> zbus::Result<()>;
 
     #[allow(dead_code)]
-    #[dbus_interface(signal, name = "TrackRemoved")]
+    #[zbus(signal, name = "TrackRemoved")]
     async fn track_removed(ctxt: &SignalContext<'_>, track: ObjectPath<'_>) -> zbus::Result<()>;
 
-    #[dbus_interface(signal, name = "TrackMetadataChanged")]
+    #[zbus(signal, name = "TrackMetadataChanged")]
     async fn track_metadata_changed(
         ctxt: &SignalContext<'_>,
         track: ObjectPath<'_>,
         metadata: HashMap<String, Value<'_>>,
     ) -> zbus::Result<()>;
 
-    #[dbus_interface(property, name = "Tracks")]
+    #[zbus(property, name = "Tracks")]
     async fn tracks(&self) -> Vec<ObjectPath<'_>> {
         let client = self.mpdclient.lock().await;
         let resp = match client.issue_command("playlistinfo").await {
@@ -128,7 +128,7 @@ impl<'a> TracklistInterface {
         ids
     }
 
-    #[dbus_interface(property, name = "CanEditTracks")]
+    #[zbus(property, name = "CanEditTracks")]
     async fn can_edit_tracks(&self) -> bool {
         false
     }

@@ -11,8 +11,8 @@ thiserror = "1"
 tokio = { version = "1", features = ["rt", "sync", "time", "io-util"]}
 futures-util = "0.3"
 # Commuicating with D-Bus
-zbus = { version = "3", default-features = false, features = ["tokio"] }
-zvariant = "3"
+zbus = { version = "4", default-features = false, features = ["tokio"] }
+zvariant = "4"
 serde = "1"
 # Parsing MPD protocol
 nom = "7"

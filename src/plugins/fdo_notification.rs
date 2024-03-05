@@ -17,13 +17,13 @@ use tokio::{
     task::JoinHandle,
     time::sleep,
 };
-use zbus::{dbus_proxy, Connection};
+use zbus::{proxy, Connection};
 use zvariant::Value;
 
 const DEFAULT_PLAYER_NAME: &str = "Music Player Daemon";
 const DEFAULT_MPD_ICON_PATH: &str = "/usr/share/icons/hicolor/scalable/apps/mpd.svg";
 
-#[dbus_proxy(assume_defaults = true)]
+#[proxy(assume_defaults = true)]
 trait Notifications {
     /// Call the org.freedesktop.Notifications.Notify D-Bus method
     fn notify(

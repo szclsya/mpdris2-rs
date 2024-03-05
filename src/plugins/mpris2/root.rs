@@ -1,10 +1,10 @@
 /// The root interface (org.mpris.MediaPlayer2) implementation
-use zbus::dbus_interface;
+use zbus::interface;
 
 #[derive(Default)]
 pub struct RootInterface {}
 
-#[dbus_interface(name = "org.mpris.MediaPlayer2")]
+#[interface(name = "org.mpris.MediaPlayer2")]
 impl RootInterface {
     #[dbus_interface(name = "Raise")]
     async fn raise(&self) {
