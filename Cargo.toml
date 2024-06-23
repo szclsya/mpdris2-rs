@@ -8,7 +8,8 @@ license = "GPL-3.0-or-later"
 [dependencies]
 anyhow = "1"
 thiserror = "1"
-tokio = { version = "1", features = ["rt", "sync", "time", "io-util"]}
+tokio = { version = "1", features = ["rt", "sync", "time", "io-util", "macros"]}
+futures = "0.3"
 futures-util = "0.3"
 # Commuicating with D-Bus
 zbus = { version = "4", default-features = false, features = ["tokio"] }

@@ -14,6 +14,9 @@ pub struct Args {
     /// disable notification
     #[argh(switch)]
     pub no_notification: bool,
+    /// minimum interval between notifications
+    #[argh(option, default = "0.1")]
+    pub notification_interval: f32,
     /// verbose
     #[argh(switch, short = 'v')]
     pub verbose: u8,
