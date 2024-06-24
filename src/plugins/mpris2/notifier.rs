@@ -14,14 +14,9 @@ pub async fn notify_loop(
     client: &Arc<Mutex<MpdStateServer>>,
 ) -> Result<()> {
     use PlayerStateChange::*;
-    let player_iface_ref = c
-        .object_server()
-        .interface::<_, PlayerInterface>(OBJECT_PATH)
-        .await?;
-    let tracklist_iface_ref = c
-        .object_server()
-        .interface::<_, TracklistInterface>(OBJECT_PATH)
-        .await?;
+    let player_iface_ref = c.object_server().interface::<_, PlayerInterface>(OBJECT_PATH).await?;
+    let tracklist_iface_ref =
+        c.object_server().interface::<_, TracklistInterface>(OBJECT_PATH).await?;
 
     loop {
         debug!("Waiting for MPD state change from org.mpris2.MediaPlayer2...");

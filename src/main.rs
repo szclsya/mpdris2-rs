@@ -16,11 +16,7 @@ use std::{sync::Arc, time::Duration};
 use tokio::{runtime, sync::Mutex, time::sleep};
 
 fn main() {
-    let rt = match runtime::Builder::new_current_thread()
-        .enable_io()
-        .enable_time()
-        .build()
-    {
+    let rt = match runtime::Builder::new_current_thread().enable_io().enable_time().build() {
         Ok(rt) => rt,
         Err(e) => {
             error!("Cannot initialize tokio runtime: {e}");
@@ -91,10 +87,7 @@ async fn try_main() -> Result<()> {
 }
 
 fn setup_logger(debug: u8) -> Result<()> {
-    let colors = ColoredLevelConfig::new()
-        .error(Color::Red)
-        .warn(Color::Yellow)
-        .info(Color::Blue);
+    let colors = ColoredLevelConfig::new().error(Color::Red).warn(Color::Yellow).info(Color::Blue);
 
     let level = match debug {
         1 => log::LevelFilter::Debug,

@@ -33,21 +33,13 @@ impl MpdClient {
         let mut hello = String::new();
         reader.read_line(&mut hello).await?;
 
-        Ok(MpdClient {
-            ip: ip.to_owned(),
-            port,
-            reader,
-            writer,
-        })
+        Ok(MpdClient { ip: ip.to_owned(), port, reader, writer })
     }
 
     async fn reconnect(&mut self) -> Result<()> {
         let stream = TcpStream::connect(format!("{}:{}", self.ip, self.port))
             .await
-            .context(format!(
-                "Cannot reconnect to MPD server at {}:{}",
-                self.ip, self.port
-            ))?;
+            .context(format!("Cannot reconnect to MPD server at {}:{}", self.ip, self.port))?;
         let (r, w) = stream.into_split();
         self.reader = BufReader::new(r);
         self.writer = BufWriter::new(w);

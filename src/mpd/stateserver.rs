@@ -71,14 +71,7 @@ impl MpdStateServer {
             }
         });
 
-        let res = MpdStateServer {
-            query_client,
-            _ping_task,
-            _idle_task,
-
-            mpd_event_tx,
-            state,
-        };
+        let res = MpdStateServer { query_client, _ping_task, _idle_task, mpd_event_tx, state };
         Ok(res)
     }
 
@@ -246,9 +239,7 @@ pub async fn update_album_art(c: &mut MpdClient) -> Result<PathBuf> {
     let fields = resp.field_map();
     let mut offset: u64 = 0;
     if fields.contains_key("binary") {
-        let size = &fields
-            .get("size")
-            .ok_or_else(|| format_err!("bad mpd response: no size"))?[0];
+        let size = &fields.get("size").ok_or_else(|| format_err!("bad mpd response: no size"))?[0];
         let binary_size = &fields.get("binary").unwrap()[0];
         pic_file.write_all(&resp.binary.unwrap()).await?;
         if size != binary_size {
@@ -257,10 +248,9 @@ pub async fn update_album_art(c: &mut MpdClient) -> Result<PathBuf> {
                 // Read the remaining parts
                 let cmd = format!("readpicture \"{uri}\" {offset}");
                 let resp = c.issue_command(&cmd).await?;
-                let size: u64 = fields
-                    .get("size")
-                    .ok_or_else(|| format_err!("bad mpd response: no size"))?[0]
-                    .parse()?;
+                let size: u64 =
+                    fields.get("size").ok_or_else(|| format_err!("bad mpd response: no size"))?[0]
+                        .parse()?;
                 let binary_size: u64 = fields.get("binary").unwrap()[0].parse()?;
                 pic_file.write_all(&resp.binary.unwrap()).await?;
                 if binary_size + offset >= size {
@@ -270,18 +260,14 @@ pub async fn update_album_art(c: &mut MpdClient) -> Result<PathBuf> {
                 offset += binary_size;
             }
         }
-        debug!(
-            "Album art updated from embedded image at {}",
-            pic_path.display()
-        );
+        debug!("Album art updated from embedded image at {}", pic_path.display());
     } else if let Ok(resp) = c.issue_command(&format!("albumart \"{uri}\" 0")).await {
         // Try cover.jpg instead
         let fields = resp.field_map();
         let mut offset: u64 = 0;
         if fields.contains_key("binary") {
-            let size = &fields
-                .get("size")
-                .ok_or_else(|| format_err!("bad mpd response: no size"))?[0];
+            let size =
+                &fields.get("size").ok_or_else(|| format_err!("bad mpd response: no size"))?[0];
             let binary_size = &fields.get("binary").unwrap()[0];
             pic_file.write_all(&resp.binary.unwrap()).await?;
             if size != binary_size {
@@ -302,10 +288,7 @@ pub async fn update_album_art(c: &mut MpdClient) -> Result<PathBuf> {
                     }
                     offset += binary_size;
                 }
-                debug!(
-                    "Album art updated from folder cover file at {}",
-                    pic_path.display()
-                );
+                debug!("Album art updated from folder cover file at {}", pic_path.display());
             }
         } else {
             debug!("No album art found");

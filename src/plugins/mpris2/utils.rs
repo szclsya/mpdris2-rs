@@ -49,8 +49,7 @@ pub fn to_mpris_metadata<'a>(
 
         // Use filename as title, if title doesn't exist
         let title = find_filename_from_relpath(&r);
-        res.entry("xesam:title".to_owned())
-            .or_insert_with(|| Value::new(title.to_owned()));
+        res.entry("xesam:title".to_owned()).or_insert_with(|| Value::new(title.to_owned()));
 
         res.insert("xesam:url".to_owned(), Value::new(r));
     }

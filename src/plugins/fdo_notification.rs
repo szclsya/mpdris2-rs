@@ -50,10 +50,7 @@ struct LastNotification {
 
 impl LastNotification {
     pub fn new() -> Self {
-        LastNotification {
-            id: 0,
-            time: Instant::now(),
-        }
+        LastNotification { id: 0, time: Instant::now() }
     }
 }
 
@@ -86,10 +83,8 @@ impl<'a> FdoNotificationRelay<'a> {
         let mut hints = HashMap::new();
         hints.insert("urgency", Value::from(0));
 
-        debug!(
-            "FdoNotification min interval set to {:?}",
-            notification_interval
-        );
+        debug!("FdoNotification min interval set to {:?}", notification_interval);
+
         let res = FdoNotificationRelay {
             proxy,
             mpd_event_rx: Mutex::new(mpd_event_rx),
@@ -102,10 +97,8 @@ impl<'a> FdoNotificationRelay<'a> {
             notification_interval,
         };
 
-        error!(
-            "Notification timeout: {}",
-            res.notification_timeout.as_secs()
-        );
+        debug!("Notification timeout: {}", res.notification_timeout.as_secs());
+
         Ok(res)
     }
 
@@ -165,10 +158,7 @@ impl<'a> FdoNotificationRelay<'a> {
             let title = metadata.get("Title").map(|list| list[0].as_str());
             let artist = metadata.get("Artist").map(|list| list[0].as_str());
             if title.is_none() || artist.is_none() {
-                metadata
-                    .get("file")
-                    .map_or("Unknown", |l| l[0].as_str())
-                    .to_owned()
+                metadata.get("file").map_or("Unknown", |l| l[0].as_str()).to_owned()
             } else {
                 format!(
                     "{} - {}",

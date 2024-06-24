@@ -137,20 +137,13 @@ impl<'a> TracklistInterface {
 pub async fn get_current_playlist<'a>(
     client: Arc<Mutex<MpdStateServer>>,
 ) -> zbus::fdo::Result<Vec<HashMap<std::string::String, zvariant::Value<'a>>>> {
-    let res = client
-        .lock()
-        .await
-        .issue_command("playlistinfo")
-        .await
-        .map_err(to_fdo_err)?;
+    let res = client.lock().await.issue_command("playlistinfo").await.map_err(to_fdo_err)?;
 
     let mut metadatas = Vec::new();
 
     let mut buf = HashMap::new();
     for (name, value) in res.fields {
-        buf.entry(name.clone())
-            .or_insert_with(|| vec![value.clone()])
-            .push(value.clone());
+        buf.entry(name.clone()).or_insert_with(|| vec![value.clone()]).push(value.clone());
         if name == "Id" {
             let mut new_buf = HashMap::new();
             std::mem::swap(&mut buf, &mut new_buf);
@@ -171,9 +164,7 @@ pub fn extract_ids_from_metadata<'a>(
     if let Value::ObjectPath(p) = path {
         Ok(p.to_owned())
     } else {
-        Err(zbus::fdo::Error::Failed(
-            "mpris::trackid is not ObjectPath".to_string(),
-        ))
+        Err(zbus::fdo::Error::Failed("mpris::trackid is not ObjectPath".to_string()))
     }
 }
 

@@ -15,10 +15,7 @@ pub struct PlayerInterface {
 
 impl PlayerInterface {
     pub async fn new(mpdclient: Arc<Mutex<MpdStateServer>>) -> Self {
-        PlayerInterface {
-            mpd_state: mpdclient.clone().lock().await.get_status(),
-            mpdclient,
-        }
+        PlayerInterface { mpd_state: mpdclient.clone().lock().await.get_status(), mpdclient }
     }
 }
 
@@ -29,9 +26,7 @@ impl PlayerInterface {
         let mut client = self.mpdclient.lock().await;
         match client.issue_command("play").await {
             Ok(_) => {
-                PlayerInterface::playback_status_changed(self, &ctxt)
-                    .await
-                    .ok();
+                PlayerInterface::playback_status_changed(self, &ctxt).await.ok();
                 client.update_status().await.ok();
             }
             Err(e) => {
@@ -44,9 +39,7 @@ impl PlayerInterface {
     async fn pause(&self, #[zbus(signal_context)] ctxt: SignalContext<'_>) {
         match self.mpdclient.lock().await.issue_command("pause 1").await {
             Ok(_) => {
-                PlayerInterface::playback_status_changed(self, &ctxt)
-                    .await
-                    .ok();
+                PlayerInterface::playback_status_changed(self, &ctxt).await.ok();
             }
             Err(e) => {
                 error!("org.mpris.MediaPlayer2.Player.Pause failed: {e}");
@@ -58,9 +51,7 @@ impl PlayerInterface {
     async fn play_pause(&self, #[zbus(signal_context)] ctxt: SignalContext<'_>) {
         match self.mpdclient.lock().await.issue_command("pause").await {
             Ok(_) => {
-                PlayerInterface::playback_status_changed(self, &ctxt)
-                    .await
-                    .ok();
+                PlayerInterface::playback_status_changed(self, &ctxt).await.ok();
             }
             Err(e) => {
                 error!("org.mpris.MediaPlayer2.Player.Play failed: {e}");
@@ -203,10 +194,7 @@ impl PlayerInterface {
 
         let state = self.mpd_state.read().await;
         if let Some(art) = &state.album_art {
-            res.insert(
-                "mpris:artUrl".to_owned(),
-                Value::new(format!("file://{}", art.display())),
-            );
+            res.insert("mpris:artUrl".to_owned(), Value::new(format!("file://{}", art.display())));
         }
         res
     }

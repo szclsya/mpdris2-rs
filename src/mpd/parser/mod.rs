@@ -14,12 +14,7 @@ pub fn parse_line(i: &str) -> Result<(&str, &str)> {
             Err::Incomplete(_) => bail!("incomplete mpd line"),
             Err::Error(e) => {
                 let pos = i.len() - e.input.len();
-                bail!(
-                    "parse line failed at {}: {} ({})",
-                    pos,
-                    e.code.description(),
-                    i
-                )
+                bail!("parse line failed at {}: {} ({})", pos, e.code.description(), i)
             }
             Err::Failure(e) => bail!("internal error while parsing mpd line: {e}"),
         },

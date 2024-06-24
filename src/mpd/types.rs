@@ -13,9 +13,7 @@ impl MpdResponse {
     pub fn field_map(&self) -> HashMap<String, Vec<String>> {
         let mut res = HashMap::new();
         for (name, value) in &self.fields {
-            res.entry(name.clone())
-                .or_insert_with(|| vec![value.clone()])
-                .push(value.to_owned());
+            res.entry(name.clone()).or_insert_with(|| vec![value.clone()]).push(value.to_owned());
         }
         res
     }
@@ -72,11 +70,8 @@ impl MpdState {
         let song_id = status.remove("songid");
         let next_song = status.remove("nextsong");
         let next_song_id = status.remove("nextsongid");
-        let volume = if let Some(vol) = status.remove("volume") {
-            Some(vol[0].parse()?)
-        } else {
-            None
-        };
+        let volume =
+            if let Some(vol) = status.remove("volume") { Some(vol[0].parse()?) } else { None };
         let mut get_or_complain = |name: &str| match status.remove(name) {
             Some(c) => c[0].clone(),
             None => {
@@ -110,10 +105,7 @@ impl MpdState {
             }
         } else {
             if !missing_fields.is_empty() {
-                bail!(
-                    "missing fields from MPD status: {}",
-                    missing_fields.join(", ")
-                );
+                bail!("missing fields from MPD status: {}", missing_fields.join(", "));
             }
             MpdPlaybackState::Stopped
         };
@@ -125,10 +117,7 @@ impl MpdState {
         };
 
         let next_song = if next_song.is_some() && next_song_id.is_some() {
-            Some((
-                next_song.unwrap()[0].parse()?,
-                next_song_id.unwrap()[0].parse()?,
-            ))
+            Some((next_song.unwrap()[0].parse()?, next_song_id.unwrap()[0].parse()?))
         } else {
             None
         };
