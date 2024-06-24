@@ -5,12 +5,12 @@ use argh::FromArgs;
 #[derive(FromArgs, Debug)]
 /// A daemon to expose MPRIS V2.1 D-Bus interface for mpd
 pub struct Args {
-    /// address of MPD server (Default: localhost)
-    #[argh(option, default = "String::from(\"localhost\")")]
-    pub host: String,
-    /// port of MPD server (Default: 6600)
-    #[argh(option, default = "6600")]
-    pub port: u32,
+    /// host address of MPD server.
+    /// default to MPD_HOST or "localhost:6600".
+    /// can be a TCP address + port (i.e. localhost:6600) or a UNIX socket path (i.e. /var/run/mpd/socket).
+    /// UNIX socket path must be an absolute path.
+    #[argh(option)]
+    pub host: Option<String>,
     /// disable notification
     #[argh(switch)]
     pub no_notification: bool,

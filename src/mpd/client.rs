@@ -1,52 +1,99 @@
 /// A simple MPD client implementation
 use super::{parse_error_line, parse_line, types::MpdResponse};
+use crate::types::MpdConnectionConfig;
 
 use anyhow::{bail, Context, Result};
 use log::{debug, error, info};
+use std::sync::Arc;
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
-    net::{
-        tcp::{OwnedReadHalf, OwnedWriteHalf},
-        TcpStream,
-    },
+    net::{tcp, unix, TcpStream, UnixStream},
     time::sleep,
 };
 
-pub struct MpdClient {
-    reader: BufReader<OwnedReadHalf>,
-    writer: BufWriter<OwnedWriteHalf>,
+enum MpdConnection {
+    Tcp((BufReader<tcp::OwnedReadHalf>, BufWriter<tcp::OwnedWriteHalf>)),
+    Socket((BufReader<unix::OwnedReadHalf>, BufWriter<unix::OwnedWriteHalf>)),
+}
 
-    // MPD info
-    ip: String,
-    port: u32,
+impl MpdConnection {
+    pub async fn connect(config: &MpdConnectionConfig) -> Result<Self> {
+        let res = match config {
+            MpdConnectionConfig::Tcp(s) => {
+                let stream = TcpStream::connect(s)
+                    .await
+                    .context(format!("Cannot connect to MPD server with TCP at {s}"))?;
+                let (r, w) = stream.into_split();
+                let (r, w) = (BufReader::new(r), BufWriter::new(w));
+                MpdConnection::Tcp((r, w))
+            }
+            MpdConnectionConfig::Socket(path) => {
+                let stream = UnixStream::connect(path).await.context(format!(
+                    "Cannot connect to MPD server with socket at {}",
+                    path.display()
+                ))?;
+                let (r, w) = stream.into_split();
+                let (r, w) = (BufReader::new(r), BufWriter::new(w));
+                MpdConnection::Socket((r, w))
+            }
+        };
+
+        Ok(res)
+    }
+
+    pub async fn read_line(&mut self, buf: &mut String) -> std::io::Result<usize> {
+        match self {
+            MpdConnection::Tcp((r, _)) => r.read_line(buf).await,
+            MpdConnection::Socket((r, _)) => r.read_line(buf).await,
+        }
+    }
+
+    pub async fn read_exact(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        match self {
+            MpdConnection::Tcp((r, _)) => r.read_exact(buf).await,
+            MpdConnection::Socket((r, _)) => r.read_exact(buf).await,
+        }
+    }
+
+    // Come with flush!
+    pub async fn write_all(&mut self, src: &[u8]) -> std::io::Result<()> {
+        match self {
+            MpdConnection::Tcp((_, w)) => {
+                w.write_all(src).await?;
+                w.flush().await?;
+            }
+            MpdConnection::Socket((_, w)) => {
+                w.write_all(src).await?;
+                w.flush().await?;
+            }
+        }
+        Ok(())
+    }
+}
+
+pub struct MpdClient {
+    config: Arc<MpdConnectionConfig>,
+    connection: MpdConnection,
 }
 
 impl MpdClient {
-    pub async fn new(ip: &str, port: u32) -> Result<Self> {
-        let stream = TcpStream::connect(format!("{}:{}", ip, port))
-            .await
-            .context(format!("Cannot connect to MPD server at {ip}:{port}"))?;
-        let (r, w) = stream.into_split();
-        let mut reader = BufReader::new(r);
-        let writer = BufWriter::new(w);
+    pub async fn new(config: Arc<MpdConnectionConfig>) -> Result<Self> {
+        let connection = MpdConnection::connect(config.as_ref()).await?;
+        let mut res = MpdClient { config, connection };
+
         // Read version info
         let mut hello = String::new();
-        reader.read_line(&mut hello).await?;
+        res.connection.read_line(&mut hello).await?;
 
-        Ok(MpdClient { ip: ip.to_owned(), port, reader, writer })
+        Ok(res)
     }
 
     async fn reconnect(&mut self) -> Result<()> {
-        let stream = TcpStream::connect(format!("{}:{}", self.ip, self.port))
-            .await
-            .context(format!("Cannot reconnect to MPD server at {}:{}", self.ip, self.port))?;
-        let (r, w) = stream.into_split();
-        self.reader = BufReader::new(r);
-        self.writer = BufWriter::new(w);
-
+        // Create a new connection based on the config we saved
+        let mut new_connection = MpdConnection::connect(self.config.as_ref()).await?;
         let mut hello = String::new();
-        self.reader.read_line(&mut hello).await?;
-
+        new_connection.read_line(&mut hello).await?;
+        self.connection = new_connection;
         Ok(())
     }
 
@@ -81,54 +128,53 @@ impl MpdClient {
         let mut real_cmd = cmd.to_owned();
         real_cmd.push('\n');
 
-        self.writer.write_all(real_cmd.as_bytes()).await?;
-        self.writer.flush().await?;
+        self.connection.write_all(real_cmd.as_bytes()).await?;
 
-        let resp = read_response(&mut self.reader).await?;
+        let resp = self.read_response().await?;
         debug!("Command {} returned", cmd);
         Ok(resp)
     }
-}
 
-async fn read_response(r: &mut BufReader<OwnedReadHalf>) -> Result<MpdResponse> {
-    let mut fields: Vec<(String, String)> = Vec::new();
-    let mut binary: Option<Vec<u8>> = None;
+    async fn read_response(&mut self) -> Result<MpdResponse> {
+        let mut fields: Vec<(String, String)> = Vec::new();
+        let mut binary: Option<Vec<u8>> = None;
 
-    let mut buf = String::new();
-    loop {
-        r.read_line(&mut buf).await?;
-        if buf.starts_with("OK") {
-            // Response ends here
-            break;
-        } else if buf.starts_with("ACK") {
-            // We encountered an error
-            let e = parse_error_line(&buf)?;
-            return Err(anyhow::Error::from(e));
-        }
-
-        // It's a normal line. Parse it.
-        let (name, value) = parse_line(&buf)?;
-        fields.push((name.to_owned(), value.to_owned()));
-
-        if name == "binary" {
-            // We are receiving a binary chunk
-            let len: u64 = value.parse()?;
-            let mut res = vec![0u8; len as usize];
-            r.read_exact(res.as_mut_slice()).await?;
-            binary = Some(res);
-            // Read newline
-            let mut newline = [0];
-            r.read_exact(&mut newline).await?;
-            // Read the last `OK` message
-            let mut buf = String::new();
-            r.read_line(&mut buf).await?;
-            if !buf.starts_with("OK") {
-                bail!("Expecting OK after binary chunk, got {}", buf);
+        let mut buf = String::new();
+        loop {
+            self.connection.read_line(&mut buf).await?;
+            if buf.starts_with("OK") {
+                // Response ends here
+                break;
+            } else if buf.starts_with("ACK") {
+                // We encountered an error
+                let e = parse_error_line(&buf)?;
+                return Err(anyhow::Error::from(e));
             }
-            break;
-        }
-        buf.clear();
-    }
 
-    Ok(MpdResponse { fields, binary })
+            // It's a normal line. Parse it.
+            let (name, value) = parse_line(&buf)?;
+            fields.push((name.to_owned(), value.to_owned()));
+
+            if name == "binary" {
+                // We are receiving a binary chunk
+                let len: u64 = value.parse()?;
+                let mut res = vec![0u8; len as usize];
+                self.connection.read_exact(res.as_mut_slice()).await?;
+                binary = Some(res);
+                // Read newline
+                let mut newline = [0];
+                self.connection.read_exact(&mut newline).await?;
+                // Read the last `OK` message
+                let mut buf = String::new();
+                self.connection.read_line(&mut buf).await?;
+                if !buf.starts_with("OK") {
+                    bail!("Expecting OK after binary chunk, got {}", buf);
+                }
+                break;
+            }
+            buf.clear();
+        }
+
+        Ok(MpdResponse { fields, binary })
+    }
 }

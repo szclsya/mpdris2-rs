@@ -2,18 +2,21 @@ mod config;
 mod mpd;
 mod plugins;
 mod types;
+use types::MpdConnectionConfig;
 
 const RETRY_INTERVAL: Duration = Duration::from_secs(5);
 
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use fern::colors::{Color, ColoredLevelConfig};
 use futures_util::stream::StreamExt;
 use log::{debug, error, info};
 use signal_hook::consts::signal::{SIGINT, SIGQUIT, SIGTERM};
 use signal_hook_tokio::Signals;
-use std::{sync::Arc, time::Duration};
+use std::{fs, os::unix::fs::FileTypeExt, path::PathBuf, sync::Arc, time::Duration};
 use tokio::{runtime, sync::Mutex, time::sleep};
+
+const DEFAULT_MPD_HOST: &str = "localhost:6060";
 
 fn main() {
     let rt = match runtime::Builder::new_current_thread().enable_io().enable_time().build() {
@@ -35,9 +38,26 @@ async fn try_main() -> Result<()> {
     let args: config::Args = argh::from_env();
     setup_logger(args.verbose)?;
 
+    // Configure how to connect to MPD
+    let connection_config = match args.host {
+        Some(s) => {
+            info!("Connecting to specified MPD server: {s}");
+            parse_host_string(&s).context("failed to parse host")?
+        }
+        None => {
+            if let Ok(s) = std::env::var("MPD_HOST") {
+                info!("Connecting to MPD_HOST: {}", s);
+                parse_host_string(&s).context("failed to parse MPD_HOST")?
+            } else {
+                info!("Connecting to default MPD server: {DEFAULT_MPD_HOST}");
+                MpdConnectionConfig::Tcp(DEFAULT_MPD_HOST.to_owned())
+            }
+        }
+    };
+
     let mut first_retry = true;
     let mpd_state_server = loop {
-        match mpd::MpdStateServer::init(&args.host, args.port).await {
+        match mpd::MpdStateServer::init(connection_config.clone()).await {
             Ok(c) => break c,
             Err(e) => {
                 if first_retry {
@@ -108,4 +128,18 @@ fn setup_logger(debug: u8) -> Result<()> {
         .chain(std::io::stdout())
         .apply()?;
     Ok(())
+}
+
+fn parse_host_string(s: &str) -> Result<MpdConnectionConfig> {
+    if s.starts_with('/') {
+        // UNIX socket
+        let path = PathBuf::from(s);
+        let file_type = fs::metadata(&path).context("Failed to read socket")?.file_type();
+        if !file_type.is_socket() {
+            bail!("bad host: {s} is not a socket!");
+        }
+        Ok(MpdConnectionConfig::Socket(path))
+    } else {
+        Ok(MpdConnectionConfig::Tcp(s.to_owned()))
+    }
 }

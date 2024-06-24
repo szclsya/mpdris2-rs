@@ -1,5 +1,5 @@
 use super::{types, types::MpdState, MpdClient};
-use crate::types::PlayerStateChange;
+use crate::types::{MpdConnectionConfig, PlayerStateChange};
 
 use anyhow::{bail, format_err, Result};
 use log::{debug, error};
@@ -30,9 +30,10 @@ pub struct MpdStateServer {
 }
 
 impl MpdStateServer {
-    pub async fn init(address: &str, port: u32) -> Result<Self> {
+    pub async fn init(connection_config: MpdConnectionConfig) -> Result<Self> {
+        let connection_config = Arc::new(connection_config);
         // Set up query client
-        let mut query_client = MpdClient::new(address, port).await?;
+        let mut query_client = MpdClient::new(connection_config.clone()).await?;
 
         let initial_state = query_client.issue_command("status").await?;
         let mut initial_state = MpdState::from(initial_state.field_map(), None)?;
@@ -58,7 +59,7 @@ impl MpdStateServer {
 
         // Create a client that receive MPD state change
         let (mpd_event_tx, _) = channel(50);
-        let mut idle_client = MpdClient::new(address, port).await?;
+        let mut idle_client = MpdClient::new(connection_config).await?;
         let s2 = state.clone();
         let tx = mpd_event_tx.clone();
         let _idle_task = spawn(async move {
@@ -174,7 +175,7 @@ async fn update_status(
             }
         }
     } else if new.song.is_some() {
-        new.album_art = old.album_art.clone();
+        new.album_art = old.album_art;
     } else if let Some(path) = old.album_art {
         if path.is_file() {
             fs::remove_file(path).await?;
