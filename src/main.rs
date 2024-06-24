@@ -134,10 +134,6 @@ fn parse_host_string(s: &str) -> Result<MpdConnectionConfig> {
     if s.starts_with('/') {
         // UNIX socket
         let path = PathBuf::from(s);
-        let file_type = fs::metadata(&path).context("Failed to read socket")?.file_type();
-        if !file_type.is_socket() {
-            bail!("bad host: {s} is not a socket!");
-        }
         Ok(MpdConnectionConfig::Socket(path))
     } else {
         Ok(MpdConnectionConfig::Tcp(s.to_owned()))
