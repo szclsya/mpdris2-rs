@@ -33,8 +33,7 @@ impl RootInterface {
 
     #[zbus(property)]
     async fn has_track_list(&self) -> bool {
-        // TODO: Implement TrackList interface and change this to true
-        false
+        true
     }
 
     #[zbus(property)]
