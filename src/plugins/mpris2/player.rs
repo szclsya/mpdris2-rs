@@ -24,7 +24,7 @@ impl PlayerInterface {
 
 #[interface(name = "org.mpris.MediaPlayer2.Player")]
 impl PlayerInterface {
-    #[zbus(name = "Play")]
+    #[zbus()]
     async fn play(&self, #[zbus(signal_context)] ctxt: SignalContext<'_>) {
         let mut client = self.mpdclient.lock().await;
         match client.issue_command("play").await {
@@ -40,7 +40,7 @@ impl PlayerInterface {
         }
     }
 
-    #[zbus(name = "Pause")]
+    #[zbus()]
     async fn pause(&self, #[zbus(signal_context)] ctxt: SignalContext<'_>) {
         match self.mpdclient.lock().await.issue_command("pause 1").await {
             Ok(_) => {
@@ -54,7 +54,7 @@ impl PlayerInterface {
         }
     }
 
-    #[zbus(name = "PlayPause")]
+    #[zbus()]
     async fn play_pause(&self, #[zbus(signal_context)] ctxt: SignalContext<'_>) {
         match self.mpdclient.lock().await.issue_command("pause").await {
             Ok(_) => {
@@ -68,12 +68,12 @@ impl PlayerInterface {
         }
     }
 
-    #[zbus(name = "Next")]
+    #[zbus()]
     async fn next(&self) {
         self.mpdclient.lock().await.issue_command("next").await.ok();
     }
 
-    #[zbus(name = "Previous")]
+    #[zbus()]
     async fn previous(&self, #[zbus(signal_context)] ctxt: SignalContext<'_>) {
         let state = self.mpd_state.read().await;
         let mut cmd = "previous";
@@ -97,12 +97,12 @@ impl PlayerInterface {
         }
     }
 
-    #[zbus(name = "Stop")]
+    #[zbus()]
     async fn stop(&self) {
         self.mpdclient.lock().await.issue_command("stop").await.ok();
     }
 
-    #[zbus(name = "Seek")]
+    #[zbus()]
     async fn seek(&self, #[zbus(signal_context)] ctxt: SignalContext<'_>, ms: i64) {
         let symbol = if ms > 0 { '+' } else { '-' };
         let t = Duration::from_micros(ms.unsigned_abs());
@@ -117,7 +117,7 @@ impl PlayerInterface {
     #[zbus(signal)]
     async fn seeked(signal_ctxt: &SignalContext<'_>, position: i64) -> zbus::Result<()>;
 
-    #[zbus(name = "SetPosition")]
+    #[zbus()]
     async fn set_position(
         &self,
         #[zbus(signal_context)] ctxt: SignalContext<'_>,
@@ -139,23 +139,23 @@ impl PlayerInterface {
         }
     }
 
-    #[zbus(name = "OpenUri")]
+    #[zbus()]
     async fn open_uri(&self, uri: &str) {
         let cmd = format!("add {}", uri);
         self.mpdclient.lock().await.issue_command(&cmd).await.ok();
     }
 
-    #[zbus(property, name = "PlaybackStatus")]
+    #[zbus(property)]
     async fn playback_status(&self) -> String {
         self.mpd_state.read().await.playback_state.to_string()
     }
 
-    #[zbus(property, name = "LoopStatus")]
+    #[zbus(property)]
     async fn loop_status(&self) -> String {
         self.mpd_state.read().await.loop_state.to_string()
     }
 
-    #[zbus(property, name = "LoopStatus")]
+    #[zbus(property)]
     async fn set_loop_status(&self, state: String) {
         let commands = match MpdLoopState::from_str(&state) {
             MpdLoopState::None => ["repeat 0", "single 0"],
@@ -167,26 +167,26 @@ impl PlayerInterface {
         }
     }
 
-    #[zbus(property, name = "Rate")]
+    #[zbus(property)]
     async fn rate(&self) -> f64 {
         1.0
     }
 
-    #[zbus(property, name = "Rate")]
+    #[zbus(property)]
     async fn set_rate(&self, _rate: f64) {}
 
-    #[zbus(property, name = "Shuffle")]
+    #[zbus(property)]
     async fn shuffle(&self) -> bool {
         self.mpd_state.read().await.random
     }
 
-    #[zbus(property, name = "Shuffle")]
+    #[zbus(property)]
     async fn set_shuffle(&self, shuffle: bool) {
         let cmd = if shuffle { "random 1" } else { "random 0" };
         self.mpdclient.lock().await.issue_command(cmd).await.ok();
     }
 
-    #[zbus(property, name = "Metadata")]
+    #[zbus(property)]
     async fn metadata(&self) -> HashMap<String, Value<'_>> {
         let state = self.mpd_state.read().await;
         let mut res = if let Some(metadata) = state.current_song.clone() {
@@ -211,7 +211,7 @@ impl PlayerInterface {
         res
     }
 
-    #[zbus(property, name = "Volume")]
+    #[zbus(property)]
     async fn volume(&self) -> f64 {
         if let Some(vol) = self.mpd_state.read().await.volume {
             vol as f64 / 100.0
@@ -220,7 +220,7 @@ impl PlayerInterface {
         }
     }
 
-    #[zbus(property, name = "Volume")]
+    #[zbus(property)]
     async fn set_volume(&self, volume: f64) {
         let mut volume = (volume * 100.0).floor();
         if volume < 0.0 {
@@ -231,7 +231,7 @@ impl PlayerInterface {
         self.mpdclient.lock().await.issue_command(&cmd).await.ok();
     }
 
-    #[zbus(property, name = "Position")]
+    #[zbus(property)]
     async fn position(&self) -> i64 {
         use MpdPlaybackState::*;
 
@@ -249,44 +249,44 @@ impl PlayerInterface {
         elapsed.as_micros() as i64
     }
 
-    #[zbus(property, name = "MinimumRate")]
+    #[zbus(property)]
     async fn minimum_rate(&self) -> f64 {
         1.0
     }
 
-    #[zbus(property, name = "MaximumRate")]
+    #[zbus(property)]
     async fn maximum_rate(&self) -> f64 {
         1.0
     }
 
-    #[zbus(property, name = "CanGoNext")]
+    #[zbus(property)]
     async fn can_go_next(&self) -> bool {
         let status = self.mpd_state.read().await;
         status.next_song.is_some() || status.loop_state == MpdLoopState::Playlist
     }
 
-    #[zbus(property, name = "CanGoPrevious")]
+    #[zbus(property)]
     async fn can_go_previous(&self) -> bool {
         true
     }
 
-    #[zbus(property, name = "CanPlay")]
+    #[zbus(property)]
     async fn can_play(&self) -> bool {
         let status = self.mpd_state.read().await;
         !matches!(status.playback_state, MpdPlaybackState::Stopped) || status.playlistlength != 0
     }
 
-    #[zbus(property, name = "CanPause")]
+    #[zbus(property)]
     async fn can_pause(&self) -> bool {
         true
     }
 
-    #[zbus(property, name = "CanSeek")]
+    #[zbus(property)]
     async fn can_seek(&self) -> bool {
         true
     }
 
-    #[zbus(property, name = "CanControl")]
+    #[zbus(property)]
     async fn can_control(&self) -> bool {
         true
     }

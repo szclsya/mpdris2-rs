@@ -75,9 +75,11 @@ async fn try_main() -> Result<()> {
         None
     };
 
+    // Broadcast MPD server state change
+    mpd_state_server.lock().await.ready().await?;
+
     // Now everything is set-up, wait for an exit signal
     info!("Service started.");
-
     let mut signals = Signals::new([SIGTERM, SIGINT, SIGQUIT])?;
     let handle = signals.handle();
     if let Some(_signal) = signals.next().await {

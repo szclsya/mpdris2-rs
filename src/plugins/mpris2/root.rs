@@ -6,53 +6,53 @@ pub struct RootInterface {}
 
 #[interface(name = "org.mpris.MediaPlayer2")]
 impl RootInterface {
-    #[dbus_interface(name = "Raise")]
+    #[zbus()]
     async fn raise(&self) {
         // mpd runs in daemon, do nothing
     }
 
-    #[dbus_interface(name = "Quit")]
+    #[zbus()]
     async fn quit(&self) {
         // mpd runs in daemon, do nothing
     }
 
-    #[dbus_interface(property, name = "CanQuit")]
+    #[zbus(property)]
     async fn can_quit(&self) -> bool {
         false
     }
 
-    #[dbus_interface(property, name = "CanSetFullscreen")]
+    #[zbus(property)]
     async fn can_set_fullscreen(&self) -> bool {
         false
     }
 
-    #[dbus_interface(property, name = "CanRaise")]
+    #[zbus(property)]
     async fn can_raise(&self) -> bool {
         false
     }
 
-    #[dbus_interface(property, name = "HasTrackList")]
+    #[zbus(property)]
     async fn has_track_list(&self) -> bool {
         // TODO: Implement TrackList interface and change this to true
         false
     }
 
-    #[dbus_interface(property, name = "Identity")]
+    #[zbus(property)]
     async fn identity(&self) -> &str {
         "Music Player Daemon (mpdris2-rs)"
     }
 
-    #[dbus_interface(property, name = "DesktopEntry")]
+    #[zbus(property)]
     async fn desktop_entry(&self) -> &str {
         "mpdris2-rs"
     }
 
-    #[dbus_interface(property, name = "SupportedUriSchemes")]
+    #[zbus(property)]
     async fn supported_uri_schemes(&self) -> &[&str] {
         &[]
     }
 
-    #[dbus_interface(property, name = "SupportedMimeTypes")]
+    #[zbus(property)]
     async fn supported_mime_types(&self) -> &[&str] {
         &[]
     }

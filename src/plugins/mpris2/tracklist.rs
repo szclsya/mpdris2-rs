@@ -20,7 +20,7 @@ impl TracklistInterface {
 
 #[interface(name = "org.mpris.MediaPlayer2.TrackList")]
 impl<'a> TracklistInterface {
-    #[zbus(name = "GetTracksMetadata")]
+    #[zbus()]
     async fn get_track_metadata(
         &self,
         tracks: Vec<ObjectPath<'_>>,
@@ -42,17 +42,17 @@ impl<'a> TracklistInterface {
         Ok(metadatas)
     }
 
-    #[zbus(name = "AddTrack")]
+    #[zbus()]
     async fn add_track(&self, _uri: String, _after: ObjectPath<'_>, _set_as_current: bool) {
         // We don't do that here.jpg
     }
 
-    #[zbus(name = "RemoveTrack")]
+    #[zbus()]
     async fn remove_track(&self, _track: ObjectPath<'_>) {
         // We don't do that here either
     }
 
-    #[zbus(name = "GoTo")]
+    #[zbus()]
     async fn goto(
         &self,
         #[zbus(signal_context)] ctxt: SignalContext<'_>,
@@ -80,7 +80,7 @@ impl<'a> TracklistInterface {
         Ok(())
     }
 
-    #[zbus(signal, name = "TrackListReplaced")]
+    #[zbus(signal)]
     pub async fn track_list_replaced(
         ctxt: &SignalContext<'_>,
         tracks: Vec<ObjectPath<'_>>,
@@ -88,7 +88,7 @@ impl<'a> TracklistInterface {
     ) -> zbus::Result<()>;
 
     #[allow(dead_code)]
-    #[zbus(signal, name = "TrackAdded")]
+    #[zbus(signal)]
     async fn track_added(
         ctxt: &SignalContext<'_>,
         metadata: HashMap<String, Value<'_>>,
@@ -96,17 +96,17 @@ impl<'a> TracklistInterface {
     ) -> zbus::Result<()>;
 
     #[allow(dead_code)]
-    #[zbus(signal, name = "TrackRemoved")]
+    #[zbus(signal)]
     async fn track_removed(ctxt: &SignalContext<'_>, track: ObjectPath<'_>) -> zbus::Result<()>;
 
-    #[zbus(signal, name = "TrackMetadataChanged")]
+    #[zbus(signal)]
     async fn track_metadata_changed(
         ctxt: &SignalContext<'_>,
         track: ObjectPath<'_>,
         metadata: HashMap<String, Value<'_>>,
     ) -> zbus::Result<()>;
 
-    #[zbus(property, name = "Tracks")]
+    #[zbus(property)]
     async fn tracks(&self) -> Vec<ObjectPath<'_>> {
         let client = self.mpdclient.lock().await;
         let resp = match client.issue_command("playlistinfo").await {
@@ -128,7 +128,7 @@ impl<'a> TracklistInterface {
         ids
     }
 
-    #[zbus(property, name = "CanEditTracks")]
+    #[zbus(property)]
     async fn can_edit_tracks(&self) -> bool {
         false
     }
