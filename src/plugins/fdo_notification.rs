@@ -182,7 +182,6 @@ impl<'a> FdoNotificationRelay<'a> {
                     let name = trim_display_str(name, MAX_SEGMENT_LEN);
                     res.push_str(&format!("\n{}", escape_notification_str(&name)));
                 }
-                error!("{res}");
                 res
             }
         } else {
