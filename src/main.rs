@@ -140,6 +140,11 @@ fn parse_host_string(s: &str, port: Option<u16>) -> Result<MpdConnectionConfig> 
         let path = PathBuf::from(s);
         Ok(MpdConnectionConfig::Socket(path))
     } else {
-        Ok(MpdConnectionConfig::Tcp(s.to_owned()))
+        let addr =  if let Some(port) = port {
+            format!("{s}:{port}")
+        } else {
+            s.to_owned()
+        };
+        Ok(MpdConnectionConfig::Tcp(addr))
     }
 }
