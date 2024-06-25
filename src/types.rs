@@ -8,6 +8,9 @@ pub enum PlayerStateChange {
     Volume,
     Song,
     NextSong,
+    // If the current song's metadata is changed
+    // Happens when a Internet radios station changes metadata
+    CurrentSong,
     Tracklist,
 }
 

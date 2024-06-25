@@ -133,12 +133,10 @@ async fn idle(
     for (name, field) in res.fields {
         if name == "changed" {
             match field.as_str() {
-                "stored_playlist" => (),
-                "playlist" => {
-                    tx.send(PlayerStateChange::Tracklist)?;
+                "playlist" | "player" | "mixer" | "options" => update_status(c, state, tx).await?,
+                unknown => {
+                    debug!("Unhandled event from mpd: {unknown}");
                 }
-                "player" | "mixer" | "options" => update_status(c, state, tx).await?,
-                _ => (),
             }
         }
     }
@@ -204,6 +202,12 @@ async fn update_status(
     }
     if new.volume != old.volume {
         tx.send(PlayerStateChange::Volume)?;
+    }
+    if new.song == old.song
+        && new.playlistlength == old.playlistlength
+        && new.current_song != old.current_song
+    {
+        tx.send(PlayerStateChange::CurrentSong)?;
     }
 
     Ok(())

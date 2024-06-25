@@ -116,8 +116,9 @@ impl<'a> FdoNotificationRelay<'a> {
         loop {
             debug!("Waiting for MPD state change from NotificationRelay...");
             let event = self.mpd_event_rx.lock().await.recv().await?;
+            debug!("New event from state server: {:?}", event);
             match event {
-                Playback | Song => {
+                Playback | Song | CurrentSong => {
                     self.send_notification().await?;
                 }
                 _ => (),
@@ -157,14 +158,12 @@ impl<'a> FdoNotificationRelay<'a> {
         } else if let Some(metadata) = &state.current_song {
             let title = metadata.get("Title").map(|list| list[0].as_str());
             let artist = metadata.get("Artist").map(|list| list[0].as_str());
-            if title.is_none() || artist.is_none() {
+            if title.is_none() && artist.is_none() {
                 metadata.get("file").map_or("Unknown", |l| l[0].as_str()).to_owned()
             } else {
-                format!(
-                    "{} - {}",
-                    artist.unwrap_or("Unknown Artist"),
-                    title.unwrap_or("Unknown Song")
-                )
+                let artist =
+                    if let Some(artist) = artist { format!("{artist} - ") } else { String::new() };
+                format!("{}{}", artist, title.unwrap_or("Unknown Song"))
             }
         } else {
             "Unknown Song - Unknown Artist".to_string()
