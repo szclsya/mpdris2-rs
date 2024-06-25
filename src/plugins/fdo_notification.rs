@@ -23,8 +23,6 @@ use zvariant::Value;
 const DEFAULT_PLAYER_NAME: &str = "Music Player Daemon";
 const DEFAULT_MPD_ICON_PATH: &str = "/usr/share/icons/hicolor/scalable/apps/mpd.svg";
 const DEFUALT_NOTIFICATION_DURATION: u64 = 5;
-// Maxinum length of the title of the music
-const MAX_TITLE_LEN: usize = 60;
 // Maximum length of a segment of metadata one notification, like artist or radio station name
 const MAX_SEGMENT_LEN: usize = 30;
 
@@ -166,19 +164,26 @@ impl<'a> FdoNotificationRelay<'a> {
             // MPD removes the `icy` part of the ICY tag used by internet radios,
             // thus icy_name becomes just "Name"
             // Hopefully nobody is using this tag in local music
-            let radio_name = metadata.get("Name").map(|list| list[0].as_str());
+            let name = metadata.get("Name").map(|list| list[0].as_str());
             if title.is_none() && artist.is_none() {
                 metadata.get("file").map_or("Unknown", |l| l[0].as_str()).to_owned()
-            } else if artist.is_none() && radio_name.is_some() {
-                // Internet radio
-                let radio_name =
-                    trim_display_str(radio_name.unwrap_or("Unknown Station"), MAX_SEGMENT_LEN);
-                format!("<b>{}</b>\n{radio_name}", title.unwrap_or("Unknown Song"))
             } else {
-                let title = trim_display_str(title.unwrap_or("Unknown Song"), MAX_TITLE_LEN);
-                let artist = trim_display_str(artist.unwrap_or_default(), MAX_SEGMENT_LEN);
-                let album = trim_display_str(album.unwrap_or_default(), MAX_SEGMENT_LEN);
-                format!("<b>{title}</b>\n{album}\n{artist}")
+                let title = title.unwrap_or("Unknown Song");
+                let mut res = format!("<b>{}</b>", escape_notification_str(&title));
+                if let Some(artist) = artist {
+                    let artist = trim_display_str(artist, MAX_SEGMENT_LEN);
+                    res.push_str(&format!("\n{}", escape_notification_str(&artist)));
+                }
+                if let Some(album) = album {
+                    let album = trim_display_str(album, MAX_SEGMENT_LEN);
+                    res.push_str(&format!("\n{}", escape_notification_str(&album)));
+                }
+                if let Some(name) = name {
+                    let name = trim_display_str(name, MAX_SEGMENT_LEN);
+                    res.push_str(&format!("\n{}", escape_notification_str(&name)));
+                }
+                error!("{res}");
+                res
             }
         } else {
             "Unknown Song\nUnknown Artist".to_string()
@@ -244,4 +249,8 @@ fn trim_display_str(s: &str, max_len: usize) -> String {
     } else {
         s.to_owned()
     }
+}
+
+fn escape_notification_str(s: &str) -> String {
+    s.replace(&['<', '>', '/', '\"', '&'][..], "")
 }
