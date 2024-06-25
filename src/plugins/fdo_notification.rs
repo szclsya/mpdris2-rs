@@ -158,8 +158,19 @@ impl<'a> FdoNotificationRelay<'a> {
         } else if let Some(metadata) = &state.current_song {
             let title = metadata.get("Title").map(|list| list[0].as_str());
             let artist = metadata.get("Artist").map(|list| list[0].as_str());
+            // MPD removes the `icy` part of the ICY tag used by internet radios,
+            // thus icy_name becomes just "Name"
+            // Hopefully nobody is using this tag in local music
+            let radio_name = metadata.get("Name").map(|list| list[0].as_str());
             if title.is_none() && artist.is_none() {
                 metadata.get("file").map_or("Unknown", |l| l[0].as_str()).to_owned()
+            } else if artist.is_none() && radio_name.is_some() {
+                // Internet radio
+                format!(
+                    "{}: {}",
+                    radio_name.unwrap_or("Unknown Station"),
+                    title.unwrap_or("Unknown Song")
+                )
             } else {
                 let artist =
                     if let Some(artist) = artist { format!("{artist} - ") } else { String::new() };

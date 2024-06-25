@@ -10,7 +10,7 @@ use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use fern::colors::{Color, ColoredLevelConfig};
 use futures_util::stream::StreamExt;
-use log::{debug, error, warn, info};
+use log::{debug, error, info, warn};
 use signal_hook::consts::signal::{SIGINT, SIGQUIT, SIGTERM};
 use signal_hook_tokio::Signals;
 use std::{fs, os::unix::fs::FileTypeExt, path::PathBuf, sync::Arc, time::Duration};
@@ -140,11 +140,7 @@ fn parse_host_string(s: &str, port: Option<u16>) -> Result<MpdConnectionConfig> 
         let path = PathBuf::from(s);
         Ok(MpdConnectionConfig::Socket(path))
     } else {
-        let addr =  if let Some(port) = port {
-            format!("{s}:{port}")
-        } else {
-            s.to_owned()
-        };
+        let addr = if let Some(port) = port { format!("{s}:{port}") } else { s.to_owned() };
         Ok(MpdConnectionConfig::Tcp(addr))
     }
 }
