@@ -116,7 +116,7 @@ impl PlayerInterface {
         position: i64,
     ) {
         let state = self.mpd_state.read().await;
-        let song = state.song.map(|(_, id)| id);
+        let song = state.song_id;
         if song == object_path_to_id(&track_id) {
             let pos = Duration::from_micros(position as u64);
             let cmd = format!("seekcur {}", pos.as_secs());

@@ -60,7 +60,7 @@ pub async fn notify_loop(
                             let client = client.lock().await;
                             let state = client.get_status();
                             let state = state.read().await;
-                            let current_pos = state.song.unwrap_or((0, 0)).0;
+                            let current_pos = state.song.unwrap_or(0);
                             ids.get(current_pos as usize).unwrap().clone()
                         };
 

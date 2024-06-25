@@ -1,4 +1,5 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Result, Context};
+use log::warn;
 use std::path::PathBuf;
 use std::{collections::HashMap, fmt::Display, time::Duration};
 
@@ -48,9 +49,10 @@ pub struct MpdState {
     pub playback_state: MpdPlaybackState,
     pub loop_state: MpdLoopState,
     pub random: bool,
-    pub volume: Option<u8>,
-    // Option<(playlist_id, song_id)>
-    pub song: Option<(u64, u64)>,
+    pub volume: Option<u64>,
+    pub playlist_id: Option<u64>,
+    pub song: Option<u64>,
+    pub song_id: Option<u64>,
     pub next_song: Option<(u64, u64)>,
     pub playlistlength: u64,
 
@@ -64,21 +66,36 @@ impl MpdState {
         metadata: Option<HashMap<String, Vec<String>>>,
     ) -> Result<Self> {
         let mut missing_fields = Vec::new();
-
-        let playlistlength = status.remove("playlistlength");
-        let song = status.remove("song");
-        let song_id = status.remove("songid");
-        let next_song = status.remove("nextsong");
-        let next_song_id = status.remove("nextsongid");
-        let volume =
-            if let Some(vol) = status.remove("volume") { Some(vol[0].parse()?) } else { None };
-        let mut get_or_complain = |name: &str| match status.remove(name) {
+        let mut get_or_complain = |name: &str| match status.get(name) {
             Some(c) => c[0].clone(),
             None => {
                 missing_fields.push(name.to_string());
                 String::new()
             }
         };
+        let get_u64 = |name: &str| match status.get(name) {
+            Some(c) => {
+                match c[0].parse::<u64>() {
+                    Ok(res) => Some(res),
+                    Err(e) => {
+                        warn!("expect {name} to be u64, got {}", c[0]);
+                        None
+                    }
+                }
+            },
+            None => {
+                None
+            }
+        };
+
+
+        let playlistlength = get_u64("playlistlength");
+        let song = get_u64("song");
+        let song_id = get_u64("songid");
+        let playlist_id = get_u64("playlist");
+        let next_song = get_u64("nextsong");
+        let next_song_id = get_u64("nextsongid");
+        let volume = get_u64("volume");
         let state = get_or_complain("state");
         let repeat = get_or_complain("repeat");
         let single = get_or_complain("single");
@@ -110,14 +127,8 @@ impl MpdState {
             MpdPlaybackState::Stopped
         };
 
-        let song = if song.is_some() && song_id.is_some() {
-            Some((song.unwrap()[0].parse()?, song_id.unwrap()[0].parse()?))
-        } else {
-            None
-        };
-
         let next_song = if next_song.is_some() && next_song_id.is_some() {
-            Some((next_song.unwrap()[0].parse()?, next_song_id.unwrap()[0].parse()?))
+            Some((next_song.unwrap(), next_song_id.unwrap()))
         } else {
             None
         };
@@ -127,9 +138,11 @@ impl MpdState {
             loop_state: MpdLoopState::from_mpd(&repeat, &single)?,
             random: mpd_num_to_bool(&random, "random")?,
             volume,
+            playlist_id,
             song,
+            song_id,
             next_song,
-            playlistlength: playlistlength.and_then(|s| s[0].parse().ok()).unwrap_or(0),
+            playlistlength: playlistlength.unwrap_or(0),
             current_song: metadata,
             album_art: None,
         };

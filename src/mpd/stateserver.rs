@@ -194,7 +194,7 @@ async fn update_status(
     if new.random != old.random {
         tx.send(PlayerStateChange::Shuffle)?;
     }
-    if new.song != old.song {
+    if new.song_id != old.song_id {
         tx.send(PlayerStateChange::Song)?;
     }
     if new.next_song != old.next_song {
