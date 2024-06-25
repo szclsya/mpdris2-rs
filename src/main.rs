@@ -10,7 +10,7 @@ use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use fern::colors::{Color, ColoredLevelConfig};
 use futures_util::stream::StreamExt;
-use log::{debug, error, info};
+use log::{debug, error, warn, info};
 use signal_hook::consts::signal::{SIGINT, SIGQUIT, SIGTERM};
 use signal_hook_tokio::Signals;
 use std::{fs, os::unix::fs::FileTypeExt, path::PathBuf, sync::Arc, time::Duration};
@@ -38,16 +38,20 @@ async fn try_main() -> Result<()> {
     let args: config::Args = argh::from_env();
     setup_logger(args.verbose)?;
 
+    if args.port.is_some() {
+        warn!("--port argument has been deprecated. Please add port in the --host argument, or use a UNIX socket.");
+    }
+
     // Configure how to connect to MPD
     let connection_config = match args.host {
         Some(s) => {
             info!("Connecting to specified MPD server: {s}");
-            parse_host_string(&s).context("failed to parse host")?
+            parse_host_string(&s, args.port).context("failed to parse host")?
         }
         None => {
             if let Ok(s) = std::env::var("MPD_HOST") {
                 info!("Connecting to MPD_HOST: {}", s);
-                parse_host_string(&s).context("failed to parse MPD_HOST")?
+                parse_host_string(&s, None).context("failed to parse MPD_HOST")?
             } else {
                 info!("Connecting to default MPD server: {DEFAULT_MPD_HOST}");
                 MpdConnectionConfig::Tcp(DEFAULT_MPD_HOST.to_owned())
@@ -130,7 +134,7 @@ fn setup_logger(debug: u8) -> Result<()> {
     Ok(())
 }
 
-fn parse_host_string(s: &str) -> Result<MpdConnectionConfig> {
+fn parse_host_string(s: &str, port: Option<u16>) -> Result<MpdConnectionConfig> {
     if s.starts_with('/') {
         // UNIX socket
         let path = PathBuf::from(s);
