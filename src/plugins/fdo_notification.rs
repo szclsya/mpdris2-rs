@@ -23,8 +23,10 @@ use zvariant::Value;
 const DEFAULT_PLAYER_NAME: &str = "Music Player Daemon";
 const DEFAULT_MPD_ICON_PATH: &str = "/usr/share/icons/hicolor/scalable/apps/mpd.svg";
 const DEFUALT_NOTIFICATION_DURATION: u64 = 5;
-// Maximum length of a segment in one notification, like artist or radio station name
-const MAX_SEGMENT_LEN: usize = 20;
+// Maxinum length of the title of the music
+const MAX_TITLE_LEN: usize = 60;
+// Maximum length of a segment of metadata one notification, like artist or radio station name
+const MAX_SEGMENT_LEN: usize = 30;
 
 #[proxy(interface = "org.freedesktop.Notifications", assume_defaults = true)]
 trait Notifications {
@@ -159,6 +161,7 @@ impl<'a> FdoNotificationRelay<'a> {
             "Playback stopped".to_string()
         } else if let Some(metadata) = &state.current_song {
             let title = metadata.get("Title").map(|list| list[0].as_str());
+            let album = metadata.get("Album").map(|list| list[0].as_str());
             let artist = metadata.get("Artist").map(|list| list[0].as_str());
             // MPD removes the `icy` part of the ICY tag used by internet radios,
             // thus icy_name becomes just "Name"
@@ -170,17 +173,15 @@ impl<'a> FdoNotificationRelay<'a> {
                 // Internet radio
                 let radio_name =
                     trim_display_str(radio_name.unwrap_or("Unknown Station"), MAX_SEGMENT_LEN);
-                format!("{radio_name}: {}", title.unwrap_or("Unknown Song"))
+                format!("<b>{}</b>\n{radio_name}", title.unwrap_or("Unknown Song"))
             } else {
+                let title = trim_display_str(title.unwrap_or("Unknown Song"), MAX_TITLE_LEN);
                 let artist = trim_display_str(artist.unwrap_or_default(), MAX_SEGMENT_LEN);
-                if artist.is_empty() {
-                    title.unwrap_or("Unknown Song").to_owned()
-                } else {
-                    format!("{} - {}", artist, title.unwrap_or("Unknown Song"))
-                }
+                let album = trim_display_str(album.unwrap_or_default(), MAX_SEGMENT_LEN);
+                format!("<b>{title}</b>\n{album}\n{artist}")
             }
         } else {
-            "Unknown Song - Unknown Artist".to_string()
+            "Unknown Song\nUnknown Artist".to_string()
         };
 
         let notification_id = self
