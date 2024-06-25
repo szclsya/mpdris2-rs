@@ -16,7 +16,7 @@ use signal_hook_tokio::Signals;
 use std::{path::PathBuf, sync::Arc, time::Duration};
 use tokio::{runtime, sync::Mutex, time::sleep};
 
-const DEFAULT_MPD_HOST: &str = "localhost:6060";
+const DEFAULT_MPD_HOST: &str = "localhost:6600";
 
 fn main() {
     let rt = match runtime::Builder::new_current_thread().enable_io().enable_time().build() {
