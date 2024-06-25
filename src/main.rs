@@ -6,14 +6,14 @@ use types::MpdConnectionConfig;
 
 const RETRY_INTERVAL: Duration = Duration::from_secs(5);
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use colored::Colorize;
 use fern::colors::{Color, ColoredLevelConfig};
 use futures_util::stream::StreamExt;
 use log::{debug, error, info, warn};
 use signal_hook::consts::signal::{SIGINT, SIGQUIT, SIGTERM};
 use signal_hook_tokio::Signals;
-use std::{fs, os::unix::fs::FileTypeExt, path::PathBuf, sync::Arc, time::Duration};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 use tokio::{runtime, sync::Mutex, time::sleep};
 
 const DEFAULT_MPD_HOST: &str = "localhost:6060";

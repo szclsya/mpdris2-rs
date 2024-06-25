@@ -9,7 +9,7 @@ use crate::types::PlayerStateChange;
 use anyhow::Result;
 use futures::StreamExt;
 use log::{debug, error};
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, default::Default, sync::Arc};
 use tokio::{
     spawn,
     sync::broadcast::Receiver,
@@ -23,6 +23,8 @@ use zvariant::Value;
 const DEFAULT_PLAYER_NAME: &str = "Music Player Daemon";
 const DEFAULT_MPD_ICON_PATH: &str = "/usr/share/icons/hicolor/scalable/apps/mpd.svg";
 const DEFUALT_NOTIFICATION_DURATION: u64 = 5;
+// Maximum length of a segment in one notification, like artist or radio station name
+const MAX_SEGMENT_LEN: usize = 20;
 
 #[proxy(interface = "org.freedesktop.Notifications", assume_defaults = true)]
 trait Notifications {
@@ -166,15 +168,16 @@ impl<'a> FdoNotificationRelay<'a> {
                 metadata.get("file").map_or("Unknown", |l| l[0].as_str()).to_owned()
             } else if artist.is_none() && radio_name.is_some() {
                 // Internet radio
-                format!(
-                    "{}: {}",
-                    radio_name.unwrap_or("Unknown Station"),
-                    title.unwrap_or("Unknown Song")
-                )
+                let radio_name =
+                    trim_display_str(radio_name.unwrap_or("Unknown Station"), MAX_SEGMENT_LEN);
+                format!("{radio_name}: {}", title.unwrap_or("Unknown Song"))
             } else {
-                let artist =
-                    if let Some(artist) = artist { format!("{artist} - ") } else { String::new() };
-                format!("{}{}", artist, title.unwrap_or("Unknown Song"))
+                let artist = trim_display_str(artist.unwrap_or_default(), MAX_SEGMENT_LEN);
+                if artist.is_empty() {
+                    title.unwrap_or("Unknown Song").to_owned()
+                } else {
+                    format!("{} - {}", artist, title.unwrap_or("Unknown Song"))
+                }
             }
         } else {
             "Unknown Song - Unknown Artist".to_string()
@@ -227,5 +230,17 @@ async fn single_run(notification_relay: &FdoNotificationRelay<'_>) {
         _ = notification_relay.close_notification() => {
             debug!("Last notification closed based on server signal.");
         }
+    }
+}
+
+fn trim_display_str(s: &str, max_len: usize) -> String {
+    // Unicode might use multiple bytes for one character
+    // Since we want string len from a human standpoint, use this instead
+    let len = s.chars().count();
+
+    if len > max_len {
+        format!("{s:.width$}...", width = max_len - 3)
+    } else {
+        s.to_owned()
     }
 }

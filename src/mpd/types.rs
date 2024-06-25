@@ -1,4 +1,4 @@
-use anyhow::{bail, Result, Context};
+use anyhow::{bail, Result};
 use log::warn;
 use std::path::PathBuf;
 use std::{collections::HashMap, fmt::Display, time::Duration};
@@ -21,6 +21,7 @@ impl MpdResponse {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum MpdStateChanged {
     StoredPlaylist,
     CurrentPlaylist,
@@ -45,6 +46,7 @@ impl From<&str> for MpdStateChanged {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct MpdState {
     pub playback_state: MpdPlaybackState,
     pub loop_state: MpdLoopState,
@@ -74,20 +76,15 @@ impl MpdState {
             }
         };
         let get_u64 = |name: &str| match status.get(name) {
-            Some(c) => {
-                match c[0].parse::<u64>() {
-                    Ok(res) => Some(res),
-                    Err(e) => {
-                        warn!("expect {name} to be u64, got {}", c[0]);
-                        None
-                    }
+            Some(c) => match c[0].parse::<u64>() {
+                Ok(res) => Some(res),
+                Err(e) => {
+                    warn!("expect {name} to be u64, got {}, reason {e}", c[0]);
+                    None
                 }
             },
-            None => {
-                None
-            }
+            None => None,
         };
-
 
         let playlistlength = get_u64("playlistlength");
         let song = get_u64("song");
@@ -127,8 +124,8 @@ impl MpdState {
             MpdPlaybackState::Stopped
         };
 
-        let next_song = if next_song.is_some() && next_song_id.is_some() {
-            Some((next_song.unwrap(), next_song_id.unwrap()))
+        let next_song = if let (Some(next_song), Some(next_song_id)) = (next_song, next_song_id) {
+            Some((next_song, next_song_id))
         } else {
             None
         };
