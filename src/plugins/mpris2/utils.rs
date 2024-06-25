@@ -1,5 +1,5 @@
 use anyhow::Result;
-use log::error;
+use log::{debug, error};
 use std::{collections::HashMap, time::Duration};
 use zvariant::{ObjectPath, Value};
 
@@ -20,6 +20,9 @@ pub fn object_path_to_id(path: &ObjectPath) -> Option<u64> {
 pub fn to_mpris_metadata<'a>(
     mut i: HashMap<String, Vec<String>>,
 ) -> Result<HashMap<String, Value<'a>>> {
+    // Run the preprocessor first. Contains quirks
+    preprocessor(&mut i);
+
     let mut res = HashMap::new();
 
     let i = &mut i;
@@ -55,6 +58,21 @@ pub fn to_mpris_metadata<'a>(
     }
 
     Ok(res)
+}
+
+// A list things to do before converting tags
+fn preprocessor(i: &mut HashMap<String, Vec<String>>) {
+    // HACK: If `Artist`, `Album`, `Genre` and `Track` doesn't exist, but `Name` do,
+    //       this is likely to be a icecast station. Use `Name` as `Album`
+    if !i.contains_key("Artist")
+        && !i.contains_key("Album")
+        && !i.contains_key("Genre")
+        && !i.contains_key("Track")
+        && i.contains_key("Name")
+    {
+        debug!("Seems that we are playing a icy stream, showing `Name` as `Album` in MPRIS2");
+        i.insert("Album".to_owned(), i.get("Name").unwrap().clone());
+    }
 }
 
 fn convert_str_tag(
