@@ -5,7 +5,7 @@ use crate::mpd::{types::*, MpdStateServer};
 use log::{debug, error};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::{Mutex, RwLock};
-use zbus::{interface, SignalContext};
+use zbus::{interface, object_server::SignalEmitter};
 use zvariant::{ObjectPath, Value};
 
 pub struct PlayerInterface {
@@ -22,7 +22,7 @@ impl PlayerInterface {
 #[interface(name = "org.mpris.MediaPlayer2.Player")]
 impl PlayerInterface {
     #[zbus()]
-    async fn play(&self, #[zbus(signal_context)] ctxt: SignalContext<'_>) {
+    async fn play(&self, #[zbus(signal_context)] ctxt: SignalEmitter<'_>) {
         let mut client = self.mpdclient.lock().await;
         match client.issue_command("play").await {
             Ok(_) => {
@@ -36,7 +36,7 @@ impl PlayerInterface {
     }
 
     #[zbus()]
-    async fn pause(&self, #[zbus(signal_context)] ctxt: SignalContext<'_>) {
+    async fn pause(&self, #[zbus(signal_context)] ctxt: SignalEmitter<'_>) {
         match self.mpdclient.lock().await.issue_command("pause 1").await {
             Ok(_) => {
                 PlayerInterface::playback_status_changed(self, &ctxt).await.ok();
@@ -48,7 +48,7 @@ impl PlayerInterface {
     }
 
     #[zbus()]
-    async fn play_pause(&self, #[zbus(signal_context)] ctxt: SignalContext<'_>) {
+    async fn play_pause(&self, #[zbus(signal_context)] ctxt: SignalEmitter<'_>) {
         match self.mpdclient.lock().await.issue_command("pause").await {
             Ok(_) => {
                 PlayerInterface::playback_status_changed(self, &ctxt).await.ok();
@@ -65,7 +65,7 @@ impl PlayerInterface {
     }
 
     #[zbus()]
-    async fn previous(&self, #[zbus(signal_context)] ctxt: SignalContext<'_>) {
+    async fn previous(&self, #[zbus(signal_context)] ctxt: SignalEmitter<'_>) {
         let state = self.mpd_state.read().await;
         let mut cmd = "previous";
         if let MpdPlaybackState::Playing(state) = &state.playback_state {
@@ -94,7 +94,7 @@ impl PlayerInterface {
     }
 
     #[zbus()]
-    async fn seek(&self, #[zbus(signal_context)] ctxt: SignalContext<'_>, ms: i64) {
+    async fn seek(&self, #[zbus(signal_context)] ctxt: SignalEmitter<'_>, ms: i64) {
         let symbol = if ms > 0 { '+' } else { '-' };
         let t = Duration::from_micros(ms.unsigned_abs());
         let cmd = format!("seekcur {symbol}{}", t.as_secs());
@@ -106,12 +106,12 @@ impl PlayerInterface {
     }
 
     #[zbus(signal)]
-    async fn seeked(signal_ctxt: &SignalContext<'_>, position: i64) -> zbus::Result<()>;
+    async fn seeked(signal_ctxt: &SignalEmitter<'_>, position: i64) -> zbus::Result<()>;
 
     #[zbus()]
     async fn set_position(
         &self,
-        #[zbus(signal_context)] ctxt: SignalContext<'_>,
+        #[zbus(signal_context)] ctxt: SignalEmitter<'_>,
         track_id: ObjectPath<'_>,
         position: i64,
     ) {

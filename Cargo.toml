@@ -7,20 +7,20 @@ license = "GPL-3.0-or-later"
 
 [dependencies]
 anyhow = "1"
-thiserror = "1"
+thiserror = "2"
 tokio = { version = "1", features = ["rt", "sync", "time", "io-util", "macros"]}
 futures = "0.3"
 futures-util = "0.3"
 # Commuicating with D-Bus
-zbus = { version = "4", default-features = false, features = ["tokio"] }
-zvariant = "4"
+zbus = { version = "5", default-features = false, features = ["tokio"] }
+zvariant = "5"
 serde = "1"
 # Parsing MPD protocol
 nom = "7"
 # Logging
 log = "0.4"
 colored = "2"
-fern = { version = "0.6", features = ["colored"] }
+fern = { version = "0.7", features = ["colored"] }
 # Signal processing
 signal-hook = "0.3"
 signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }

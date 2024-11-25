@@ -40,9 +40,6 @@ trait Notifications {
         hints: &HashMap<&str, Value<'_>>,
         expire_timeout: i32,
     ) -> zbus::Result<u32>;
-
-    #[dbus_proxy(signal)]
-    fn notification_closed(&self, id: u32, reason: u32) -> zbus::Result<()>;
 }
 
 struct LastNotification {
@@ -141,12 +138,12 @@ impl<'a> FdoNotificationRelay<'a> {
         if last_notification.time.elapsed() < self.notification_interval {
             debug!("Not sending notification due to rate-limit.");
             return Ok(());
-        } else {
-            debug!(
-                "Last notification sent on {:?}, we shouldn't be hitting rate limits",
-                last_notification.time.elapsed()
-            );
         }
+
+        debug!(
+            "Last notification sent on {:?}, we shouldn't be hitting rate limits",
+            last_notification.time.elapsed()
+        );
 
         let state = self.state.read().await;
         let playback_status = state.playback_state.to_string();
@@ -169,7 +166,7 @@ impl<'a> FdoNotificationRelay<'a> {
                 metadata.get("file").map_or("Unknown", |l| l[0].as_str()).to_owned()
             } else {
                 let title = title.unwrap_or("Unknown Song");
-                let mut res = format!("<b>{}</b>", escape_notification_str(&title));
+                let mut res = format!("<b>{}</b>", escape_notification_str(title));
                 if let Some(artist) = artist {
                     let artist = trim_display_str(artist, MAX_SEGMENT_LEN);
                     res.push_str(&format!("\n{}", escape_notification_str(&artist)));

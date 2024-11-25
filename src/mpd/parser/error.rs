@@ -16,7 +16,7 @@ pub struct MpdError {
     current_command: String,
 }
 
-/// See https://github.com/MusicPlayerDaemon/MPD/blob/master/src/protocol/Ack.hxx
+/// See <https://github.com/MusicPlayerDaemon/MPD/blob/master/src/protocol/Ack.hxx>
 #[derive(Error, Debug)]
 pub enum MpdErrorType {
     #[error("Unknown error from MPD: {0}")]

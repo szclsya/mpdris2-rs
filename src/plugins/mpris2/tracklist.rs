@@ -5,7 +5,7 @@ use crate::mpd::MpdStateServer;
 use log::error;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
-use zbus::{interface, SignalContext};
+use zbus::{interface, object_server::SignalEmitter};
 use zvariant::{ObjectPath, Value};
 
 pub struct TracklistInterface {
@@ -55,7 +55,7 @@ impl<'a> TracklistInterface {
     #[zbus()]
     async fn goto(
         &self,
-        #[zbus(signal_context)] ctxt: SignalContext<'_>,
+        #[zbus(signal_context)] ctxt: SignalEmitter<'_>,
         track: ObjectPath<'_>,
     ) -> zbus::fdo::Result<()> {
         let id = if let Some(id) = object_path_to_id(&track) {
@@ -82,7 +82,7 @@ impl<'a> TracklistInterface {
 
     #[zbus(signal)]
     pub async fn track_list_replaced(
-        ctxt: &SignalContext<'_>,
+        ctxt: &SignalEmitter<'_>,
         tracks: Vec<ObjectPath<'_>>,
         current: ObjectPath<'_>,
     ) -> zbus::Result<()>;
@@ -90,18 +90,18 @@ impl<'a> TracklistInterface {
     #[allow(dead_code)]
     #[zbus(signal)]
     async fn track_added(
-        ctxt: &SignalContext<'_>,
+        ctxt: &SignalEmitter<'_>,
         metadata: HashMap<String, Value<'_>>,
         after: ObjectPath<'_>,
     ) -> zbus::Result<()>;
 
     #[allow(dead_code)]
     #[zbus(signal)]
-    async fn track_removed(ctxt: &SignalContext<'_>, track: ObjectPath<'_>) -> zbus::Result<()>;
+    async fn track_removed(ctxt: &SignalEmitter<'_>, track: ObjectPath<'_>) -> zbus::Result<()>;
 
     #[zbus(signal)]
     async fn track_metadata_changed(
-        ctxt: &SignalContext<'_>,
+        ctxt: &SignalEmitter<'_>,
         track: ObjectPath<'_>,
         metadata: HashMap<String, Value<'_>>,
     ) -> zbus::Result<()>;
