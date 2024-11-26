@@ -84,6 +84,8 @@ impl MpdClient {
         // Read version info
         let mut hello = String::new();
         res.connection.read_line(&mut hello).await?;
+        // Increase binary chunk size
+        res.issue_command("binarylimit 524288").await?;
 
         Ok(res)
     }
