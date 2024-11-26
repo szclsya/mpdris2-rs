@@ -40,6 +40,10 @@ trait Notifications {
         hints: &HashMap<&str, Value<'_>>,
         expire_timeout: i32,
     ) -> zbus::Result<u32>;
+
+    /// NotificationClosed signal
+    #[zbus(signal)]
+    fn notification_closed(&self, arg_1: u32, arg_2: u32) -> zbus::Result<()>;
 }
 
 struct LastNotification {
