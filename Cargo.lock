@@ -471,7 +471,7 @@ dependencies = [
 
 [[package]]
 name = "mpdris2-rs"
-version = "0.2.3"
+version = "1.0.0-beta.1"
 dependencies = [
  "anyhow",
  "argh",
