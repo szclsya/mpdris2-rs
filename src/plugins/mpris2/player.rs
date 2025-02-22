@@ -49,7 +49,13 @@ impl PlayerInterface {
 
     #[zbus()]
     async fn play_pause(&self, #[zbus(signal_context)] ctxt: SignalEmitter<'_>) {
-        match self.mpdclient.lock().await.issue_command("pause").await {
+        // Decide with command to use based on the current state
+        let state = self.mpd_state.read().await;
+        let command = match state.playback_state {
+            MpdPlaybackState::Stopped => "play",
+            _ => "pause",
+        };
+        match self.mpdclient.lock().await.issue_command(command).await {
             Ok(_) => {
                 PlayerInterface::playback_status_changed(self, &ctxt).await.ok();
             }
