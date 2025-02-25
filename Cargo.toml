@@ -17,17 +17,17 @@ zbus = { version = "5", default-features = false, features = ["tokio"] }
 zvariant = "5"
 serde = "1"
 # Parsing MPD protocol
-nom = "7"
+nom = "8"
 # Logging
 log = "0.4"
-colored = "2"
+colored = "3"
 fern = { version = "0.7", features = ["colored"] }
 # Signal processing
 signal-hook = "0.3"
 signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }
 # Config
 argh = "0.1"
-dirs = "5"
+dirs = "6"
 
 [profile.release]
 # Optimize for size. This isn't a performance sensitive app
