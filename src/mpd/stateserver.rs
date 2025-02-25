@@ -3,7 +3,7 @@ use crate::types::{MpdConnectionConfig, PlayerStateChange};
 
 use anyhow::{bail, format_err, Result};
 use log::{debug, error};
-use std::{mem::discriminant, path::PathBuf, sync::Arc, time::Duration};
+use std::{collections::HashMap, mem::discriminant, path::PathBuf, sync::Arc, time::Duration};
 use tokio::{
     fs,
     fs::File,
@@ -36,7 +36,7 @@ impl MpdStateServer {
         let mut query_client = MpdClient::new(connection_config.clone()).await?;
 
         let initial_state = query_client.issue_command("status").await?;
-        let mut initial_state = MpdState::from(initial_state.field_map(), None)?;
+        let mut initial_state = MpdState::from(initial_state.field_map(), HashMap::new())?;
         if let Ok(album_art_path) = update_album_art(&mut query_client).await {
             initial_state.album_art = Some(album_art_path);
         }
@@ -152,13 +152,27 @@ async fn update_status(
     let new_status = c.issue_command("status").await?;
     let mut new = if new_status.fields.iter().any(|(name, _)| name == "song") {
         let metadata = c.issue_command("currentsong").await?.field_map();
-        MpdState::from(new_status.field_map(), Some(metadata))?
+        MpdState::from(new_status.field_map(), metadata)?
     } else {
-        MpdState::from(new_status.field_map(), None)?
+        MpdState::from(new_status.field_map(), HashMap::new())?
     };
     let old = state.read().await.clone();
 
-    if new.song.is_some() && new.song != old.song {
+    // MPD uses "Name" for ICY streams
+    let old_name = old.current_song.get("Name");
+    let new_name = new.current_song.get("Name");
+    let update_cover = if new.song.is_some() && new.song != old.song {
+        // TODO: Change me back to debug!
+        error!("Updating cover due to new song id");
+        true
+    } else if new.song.is_some() && new_name != old_name {
+        error!("Updating cover due to new ICY stream title");
+        true
+    } else {
+        false
+    };
+
+    if update_cover {
         match update_album_art(c).await {
             Ok(new_path) => {
                 new.album_art = Some(new_path);
@@ -300,6 +314,6 @@ pub async fn update_album_art(c: &mut MpdClient) -> Result<PathBuf> {
         }
     }
     pic_file.flush().await?;
-    debug!("Album art update finished");
+    debug!("Album art update finished, written {} bytes", offset);
     Ok(pic_path)
 }

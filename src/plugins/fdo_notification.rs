@@ -158,7 +158,8 @@ impl<'a> FdoNotificationRelay<'a> {
         img_uri.insert_str(0, "file://");
         let body = if state.playback_state == MpdPlaybackState::Stopped {
             "Playback stopped".to_string()
-        } else if let Some(metadata) = &state.current_song {
+        } else {
+            let metadata = &state.current_song;
             let title = metadata.get("Title").map(|list| list[0].as_str());
             let album = metadata.get("Album").map(|list| list[0].as_str());
             let artist = metadata.get("Artist").map(|list| list[0].as_str());
@@ -185,8 +186,6 @@ impl<'a> FdoNotificationRelay<'a> {
                 }
                 res
             }
-        } else {
-            "Unknown Song\nUnknown Artist".to_string()
         };
 
         let notification_id = self

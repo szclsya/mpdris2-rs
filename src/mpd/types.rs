@@ -58,14 +58,14 @@ pub struct MpdState {
     pub next_song: Option<(u64, u64)>,
     pub playlistlength: u64,
 
-    pub current_song: Option<HashMap<String, Vec<String>>>,
+    pub current_song: HashMap<String, Vec<String>>,
     pub album_art: Option<PathBuf>,
 }
 
 impl MpdState {
     pub fn from(
         mut status: HashMap<String, Vec<String>>,
-        metadata: Option<HashMap<String, Vec<String>>>,
+        metadata: HashMap<String, Vec<String>>,
     ) -> Result<Self> {
         let mut missing_fields = Vec::new();
         let mut get_or_complain = |name: &str| match status.get(name) {
