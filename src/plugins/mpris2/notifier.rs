@@ -2,7 +2,7 @@ use super::{PlayerInterface, TracklistInterface, OBJECT_PATH};
 use crate::{mpd::MpdStateServer, types::PlayerStateChange};
 
 use anyhow::Result;
-use log::debug;
+use log::trace;
 use std::sync::Arc;
 use tokio::sync::{broadcast::Receiver, Mutex};
 use zbus::Connection;
@@ -19,7 +19,7 @@ pub async fn notify_loop(
         c.object_server().interface::<_, TracklistInterface>(OBJECT_PATH).await?;
 
     loop {
-        debug!("Waiting for MPD state change from org.mpris2.MediaPlayer2...");
+        trace!("Waiting for MPD state change from org.mpris2.MediaPlayer2...");
         let signal = rx.recv().await;
 
         let player_iface = player_iface_ref.get_mut().await;

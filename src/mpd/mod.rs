@@ -8,3 +8,5 @@ pub use client::MpdClient;
 
 mod stateserver;
 pub use stateserver::MpdStateServer;
+
+mod albumart;

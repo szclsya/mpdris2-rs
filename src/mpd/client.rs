@@ -3,7 +3,7 @@ use super::{parse_error_line, parse_line, types::MpdResponse};
 use crate::types::MpdConnectionConfig;
 
 use anyhow::{bail, Context, Result};
-use log::{debug, error, info};
+use log::{trace, debug, error, info};
 use std::sync::Arc;
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
@@ -126,14 +126,14 @@ impl MpdClient {
     /// Issue command to MPD server and wait for response.
     /// Returns when response has been received and parsed.
     pub async fn issue_command(&mut self, cmd: &str) -> Result<MpdResponse> {
-        debug!("Issuing command to MPD: {}", cmd);
+        trace!("Issuing command to MPD: {}", cmd);
         let mut real_cmd = cmd.to_owned();
         real_cmd.push('\n');
 
         self.connection.write_all(real_cmd.as_bytes()).await?;
 
         let resp = self.read_response().await?;
-        debug!("Command {} returned", cmd);
+        trace!("Command {} returned", cmd);
         Ok(resp)
     }
 

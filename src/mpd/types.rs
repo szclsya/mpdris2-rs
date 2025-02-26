@@ -1,7 +1,9 @@
 use anyhow::{bail, Result};
 use log::warn;
 use std::path::PathBuf;
-use std::{collections::HashMap, fmt::Display, time::Duration};
+use std::{collections::{HashMap, VecDeque}, fmt::Display, time::Duration, sync::Arc};
+use tokio::sync::RwLock;
+use tokio_util::sync::CancellationToken;
 
 // A list of fields + optional binary data
 #[derive(Debug)]
@@ -45,7 +47,13 @@ impl From<&str> for MpdStateChanged {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Mpdris2State {
+    pub album_art_cache: Arc<RwLock<VecDeque<u64>>>,
+    pub album_art_updating: Arc<RwLock<Option<CancellationToken>>>,
+    pub mpdstate: Arc<RwLock<MpdState>>,
+}
+
+#[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct MpdState {
     pub playback_state: MpdPlaybackState,

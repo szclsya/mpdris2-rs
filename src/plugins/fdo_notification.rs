@@ -8,7 +8,7 @@ use crate::types::PlayerStateChange;
 
 use anyhow::Result;
 use futures::StreamExt;
-use log::{debug, error};
+use log::{trace, debug, error};
 use std::{collections::HashMap, default::Default, sync::Arc};
 use tokio::{
     spawn,
@@ -48,12 +48,14 @@ trait Notifications {
 
 struct LastNotification {
     id: u32,
+    body: String,
+    img_uri: String,
     time: Instant,
 }
 
 impl LastNotification {
     pub fn new() -> Self {
-        LastNotification { id: 0, time: Instant::now() }
+        LastNotification { id: 0, body: String::new(), img_uri: String::new(), time: Instant::now() }
     }
 }
 
@@ -117,9 +119,9 @@ impl<'a> FdoNotificationRelay<'a> {
     async fn send_notification_on_event(&self) -> Result<()> {
         use PlayerStateChange::*;
         loop {
-            debug!("Waiting for MPD state change from NotificationRelay...");
+            trace!("Waiting for MPD state change from NotificationRelay...");
             let event = self.mpd_event_rx.lock().await.recv().await?;
-            debug!("New event from state server: {:?}", event);
+            trace!("New event from state server: {:?}", event);
             match event {
                 Playback | Song | CurrentSong => {
                     self.send_notification().await?;
@@ -188,6 +190,10 @@ impl<'a> FdoNotificationRelay<'a> {
             }
         };
 
+        if body == last_notification.body && img_uri == last_notification.img_uri {
+            debug!("Same notification, not sending");
+            return Ok(())
+        }
         let notification_id = self
             .proxy
             .notify(
@@ -205,6 +211,8 @@ impl<'a> FdoNotificationRelay<'a> {
         debug!("New notification id is {notification_id} with icon {img_uri}");
         last_notification.id = notification_id;
         last_notification.time = Instant::now();
+        last_notification.body = body;
+        last_notification.img_uri = img_uri;
         Ok(())
     }
 }
