@@ -8,7 +8,7 @@ use crate::types::PlayerStateChange;
 
 use anyhow::Result;
 use futures::StreamExt;
-use log::{trace, debug, error};
+use log::{debug, error, trace};
 use std::{collections::HashMap, default::Default, sync::Arc};
 use tokio::{
     spawn,
@@ -49,13 +49,13 @@ trait Notifications {
 struct LastNotification {
     id: u32,
     body: String,
-    img_uri: String,
+    album_art: Option<String>,
     time: Instant,
 }
 
 impl LastNotification {
     pub fn new() -> Self {
-        LastNotification { id: 0, body: String::new(), img_uri: String::new(), time: Instant::now() }
+        LastNotification { id: 0, body: String::new(), album_art: None, time: Instant::now() }
     }
 }
 
@@ -65,7 +65,6 @@ pub struct FdoNotificationRelay<'a> {
     state: Arc<RwLock<MpdState>>,
 
     // Settings
-    mpd_icon: String,
     notification_timeout: Duration,
     // Rate-limit settings and internal variables
     notification_interval: Duration,
@@ -94,7 +93,6 @@ impl<'a> FdoNotificationRelay<'a> {
             proxy,
             mpd_event_rx: Mutex::new(mpd_event_rx),
             state,
-            mpd_icon: DEFAULT_MPD_ICON_PATH.to_owned(),
             notification_timeout: Duration::from_secs(DEFUALT_NOTIFICATION_DURATION),
             notification_close_signal: Mutex::new(notification_close_signal),
             last_notification: Mutex::new(LastNotification::new()),
@@ -153,11 +151,6 @@ impl<'a> FdoNotificationRelay<'a> {
 
         let state = self.state.read().await;
         let playback_status = state.playback_state.to_string();
-        let mut img_uri = state
-            .album_art
-            .as_ref()
-            .map_or_else(|| self.mpd_icon.clone(), |path| path.display().to_string());
-        img_uri.insert_str(0, "file://");
         let body = if state.playback_state == MpdPlaybackState::Stopped {
             "Playback stopped".to_string()
         } else {
@@ -190,29 +183,35 @@ impl<'a> FdoNotificationRelay<'a> {
             }
         };
 
-        if body == last_notification.body && img_uri == last_notification.img_uri {
+        let album_art = state.album_art.clone().map(|p| format!("file://{}", p.display()));
+        if body == last_notification.body && album_art == last_notification.album_art {
             debug!("Same notification, not sending");
-            return Ok(())
+            return Ok(());
+        }
+
+        let mut hints = self.hints.clone();
+        if let Some(album_art) = &album_art {
+            hints.insert("image-path", Value::from(album_art));
         }
         let notification_id = self
             .proxy
             .notify(
                 DEFAULT_PLAYER_NAME,
                 last_notification.id,
-                &img_uri,
+                DEFAULT_MPD_ICON_PATH,
                 &playback_status,
                 &body,
                 &[],
-                &self.hints,
+                &hints,
                 self.notification_timeout.as_millis() as i32,
             )
             .await?;
 
-        debug!("New notification id is {notification_id} with icon {img_uri}");
+        debug!("New notification id is {notification_id}");
         last_notification.id = notification_id;
         last_notification.time = Instant::now();
         last_notification.body = body;
-        last_notification.img_uri = img_uri;
+        last_notification.album_art = album_art;
         Ok(())
     }
 }
