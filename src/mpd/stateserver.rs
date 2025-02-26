@@ -1,4 +1,8 @@
-use super::{albumart::*, types::{self, MpdState, Mpdris2State}, MpdClient};
+use super::{
+    albumart::*,
+    types::{self, MpdState, Mpdris2State},
+    MpdClient,
+};
 use crate::types::{MpdConnectionConfig, PlayerStateChange};
 
 use anyhow::Result;
@@ -37,7 +41,9 @@ impl MpdStateServer {
         let init_state = query_client.issue_command("status").await?.field_map();
         let init_meta = query_client.issue_command("currentsong").await?.field_map();
         let mut initial_state = MpdState::from(init_state, init_meta)?;
-        if let Err(e) = update_album_art(&mut query_client, &mut initial_state, &mut album_art_cache).await {
+        if let Err(e) =
+            update_album_art(&mut query_client, &mut initial_state, &mut album_art_cache).await
+        {
             warn!("Can't retrieve initial album art: {e}");
         }
         let mpdstate = Arc::new(RwLock::new(initial_state));
@@ -170,12 +176,7 @@ async fn update_status(
         update_album_art(c, &mut new, &mut album_art_cache).await?;
     } else if new.song.is_some() && new.current_song.contains_key("Name") && subsystem == "player" {
         debug!("Updating cover due to new ICY tag changed");
-        tokio::task::spawn(repeated_update_album_art(
-            query_client,
-            state.clone(),
-            3,
-            tx.clone(),
-        ));
+        tokio::task::spawn(repeated_update_album_art(query_client, state.clone(), 3, tx.clone()));
     }
 
     // Write changes before broadcasting, so that receivers will have the latest state

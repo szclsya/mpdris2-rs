@@ -3,7 +3,7 @@ use super::{parse_error_line, parse_line, types::MpdResponse};
 use crate::types::MpdConnectionConfig;
 
 use anyhow::{bail, Context, Result};
-use log::{trace, debug, error, info};
+use log::{debug, error, info, trace};
 use std::sync::Arc;
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},

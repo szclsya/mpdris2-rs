@@ -1,7 +1,12 @@
 use anyhow::{bail, Result};
 use log::warn;
 use std::path::PathBuf;
-use std::{collections::{HashMap, VecDeque}, fmt::Display, time::Duration, sync::Arc};
+use std::{
+    collections::{HashMap, VecDeque},
+    fmt::Display,
+    sync::Arc,
+    time::Duration,
+};
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 

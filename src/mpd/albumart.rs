@@ -1,15 +1,24 @@
-use super::{types::{MpdState, Mpdris2State}, MpdClient};
+use super::{
+    types::{MpdState, Mpdris2State},
+    MpdClient,
+};
 use crate::types::PlayerStateChange;
 
 use anyhow::{bail, format_err, Result};
-use log::{trace, debug, error};
-use std::{collections::{HashMap, VecDeque}, hash::Hasher, path::PathBuf, sync::Arc, time::Duration};
+use log::{debug, error, trace};
+use std::{
+    collections::{HashMap, VecDeque},
+    hash::Hasher,
+    path::PathBuf,
+    sync::Arc,
+    time::Duration,
+};
 use tokio::{
     fs,
     fs::File,
     io::{AsyncWriteExt, BufWriter},
     sync::broadcast::Sender,
-    sync::{Mutex, RwLock},
+    sync::Mutex,
     time::sleep,
 };
 use tokio_util::sync::CancellationToken;
@@ -42,7 +51,10 @@ pub async fn update_album_art(
     let mut success = false;
     for cmd in ["readpicture", "albumart"] {
         match mpd_binary_to_file(c, "readpicture", uri, &path).await {
-            Ok(true) => { success = true; break },
+            Ok(true) => {
+                success = true;
+                break;
+            }
             Ok(false) => (),
             Err(e) => debug!("Can't read album art with {cmd}: {e}"),
         };
@@ -167,7 +179,7 @@ async fn mpd_binary_to_file(
     if fields.contains_key("binary") {
         let size = &fields.get("size").ok_or_else(|| format_err!("bad mpd response: no size"))?[0];
         let binary_size = &fields.get("binary").unwrap()[0];
-        let mut pic_file = prepare_album_art_file(&path).await?;
+        let mut pic_file = prepare_album_art_file(path).await?;
         pic_file.write_all(&resp.binary.unwrap()).await?;
         if size != binary_size {
             offset += binary_size.parse::<u64>()?;
