@@ -202,7 +202,7 @@ impl<'a> FdoNotificationRelay<'a> {
             )
             .await?;
 
-        debug!("New notification id is {notification_id}");
+        debug!("New notification id is {notification_id} with icon {img_uri}");
         last_notification.id = notification_id;
         last_notification.time = Instant::now();
         Ok(())

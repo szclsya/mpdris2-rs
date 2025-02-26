@@ -3,7 +3,9 @@ use crate::types::{MpdConnectionConfig, PlayerStateChange};
 
 use anyhow::{bail, format_err, Result};
 use log::{debug, error};
-use std::{collections::HashMap, mem::discriminant, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap, hash::Hasher, mem::discriminant, path::PathBuf, sync::Arc, time::Duration
+};
 use tokio::{
     fs,
     fs::File,
@@ -37,8 +39,8 @@ impl MpdStateServer {
 
         let initial_state = query_client.issue_command("status").await?;
         let mut initial_state = MpdState::from(initial_state.field_map(), HashMap::new())?;
-        if let Ok(album_art_path) = update_album_art(&mut query_client).await {
-            initial_state.album_art = Some(album_art_path);
+        if let Ok(album_art_path) = update_album_art(&mut query_client, &initial_state).await {
+            initial_state.album_art = album_art_path;
         }
         let state = Arc::new(RwLock::new(initial_state));
 
@@ -86,7 +88,7 @@ impl MpdStateServer {
 
     pub async fn update_status(&mut self) -> Result<()> {
         let mut c = self.query_client.lock().await;
-        update_status(&mut c, &self.state, &self.mpd_event_tx).await?;
+        update_status(&mut c, &self.state, &self.mpd_event_tx, "").await?;
         Ok(())
     }
 
@@ -108,7 +110,7 @@ impl MpdStateServer {
 
         let mut client = self.query_client.lock().await;
         let tx = &self.mpd_event_tx;
-        update_status(&mut client, &self.state, tx).await?;
+        update_status(&mut client, &self.state, tx,"player").await?;
 
         tx.send(Playback)?;
         tx.send(Loop)?;
@@ -132,8 +134,9 @@ async fn idle(
 
     for (name, field) in res.fields {
         if name == "changed" {
+            debug!("Idle interrupted by {}", field.as_str());
             match field.as_str() {
-                "playlist" | "player" | "mixer" | "options" => update_status(c, state, tx).await?,
+                "playlist" | "player" | "mixer" | "options" => update_status(c, state, tx, &field).await?,
                 unknown => {
                     debug!("Unhandled event from mpd: {unknown}");
                 }
@@ -148,6 +151,7 @@ async fn update_status(
     c: &mut MpdClient,
     state: &Arc<RwLock<types::MpdState>>,
     tx: &Sender<PlayerStateChange>,
+    subsystem: &str
 ) -> Result<()> {
     let new_status = c.issue_command("status").await?;
     let mut new = if new_status.fields.iter().any(|(name, _)| name == "song") {
@@ -157,25 +161,24 @@ async fn update_status(
         MpdState::from(new_status.field_map(), HashMap::new())?
     };
     let old = state.read().await.clone();
-
-    // MPD uses "Name" for ICY streams
-    let old_name = old.current_song.get("Name");
-    let new_name = new.current_song.get("Name");
     let update_cover = if new.song.is_some() && new.song != old.song {
-        // TODO: Change me back to debug!
-        error!("Updating cover due to new song id");
+        debug!("Updating cover due to new song id");
         true
-    } else if new.song.is_some() && new_name != old_name {
-        error!("Updating cover due to new ICY stream title");
+    } else if new.song.is_some()
+        && new.current_song.contains_key("Name")
+        && subsystem == "player"
+    {
+        debug!("Updating cover due to new ICY tag changed");
+        tokio::time::sleep(Duration::from_millis(50)).await;
         true
     } else {
         false
     };
 
     if update_cover {
-        match update_album_art(c).await {
+        match update_album_art(c, &new).await {
             Ok(new_path) => {
-                new.album_art = Some(new_path);
+                new.album_art = new_path;
                 if let Some(path) = &old.album_art {
                     if path.is_file() {
                         fs::remove_file(path).await?;
@@ -208,7 +211,7 @@ async fn update_status(
     if new.random != old.random {
         tx.send(PlayerStateChange::Shuffle)?;
     }
-    if new.song_id != old.song_id {
+    if new.song_id != old.song_id || update_cover {
         tx.send(PlayerStateChange::Song)?;
     }
     if new.next_song != old.next_song {
@@ -227,32 +230,41 @@ async fn update_status(
     Ok(())
 }
 
-pub async fn update_album_art(c: &mut MpdClient) -> Result<PathBuf> {
-    // Find out song URI
-    let resp = c.issue_command("currentsong").await?;
-    let uri = match resp.field_map().remove("file") {
-        Some(mut uri) => uri.remove(0),
-        None => bail!("invalid MPD response: no current song uri"),
-    };
-    let id = match resp.field_map().remove("Id") {
-        Some(mut id) => id.remove(0),
-        None => bail!("invalid MPD response: no current song ID"),
-    };
+async fn prepare_album_art_file(state: &MpdState) -> Result<(PathBuf, BufWriter<File>)> {
     let pic_dir = match dirs::runtime_dir() {
         Some(path) => path,
         None => PathBuf::from("/tmp"),
     }
     .join("mpd/album_art/");
-
     if !pic_dir.is_dir() {
         fs::create_dir_all(&pic_dir).await?;
     }
-    let pic_path = pic_dir.join(id);
+    // Calculate a hash for the filename
+    let mut hasher = twox_hash::XxHash32::with_seed(123);
+    for (k, v) in &state.current_song {
+        hasher.write(k.as_bytes());
+        for v in v {
+            hasher.write(v.as_bytes());
+        }
+    }
+    let filename_hash = hasher.finish();
+    let filename = base32::encode(base32::Alphabet::Z, &filename_hash.to_le_bytes());
+    //let filename = state.song_id.unwrap().to_string();
+    let pic_path = pic_dir.join(filename);
     if pic_path.is_file() {
         fs::remove_file(&pic_path).await?;
     }
-    let mut pic_file = BufWriter::new(File::create(&pic_path).await?);
+    debug!("Creating new album art file at {}", pic_path.display());
+    let pic_file = BufWriter::new(File::create(&pic_path).await?);
+    Ok((pic_path, pic_file))
+}
 
+pub async fn update_album_art(c: &mut MpdClient, state: &MpdState) -> Result<Option<PathBuf>> {
+    let uri = if let Some(uri) = &state.file {
+        uri
+    } else {
+        bail!("No `file` in currentsong!");
+    };
     // Try integrated art first
     let resp = c.issue_command(&format!("readpicture \"{uri}\" 0")).await?;
     let fields = resp.field_map();
@@ -260,6 +272,7 @@ pub async fn update_album_art(c: &mut MpdClient) -> Result<PathBuf> {
     if fields.contains_key("binary") {
         let size = &fields.get("size").ok_or_else(|| format_err!("bad mpd response: no size"))?[0];
         let binary_size = &fields.get("binary").unwrap()[0];
+        let (pic_path, mut pic_file) = prepare_album_art_file(state).await?;
         pic_file.write_all(&resp.binary.unwrap()).await?;
         if size != binary_size {
             offset += binary_size.parse::<u64>()?;
@@ -280,6 +293,7 @@ pub async fn update_album_art(c: &mut MpdClient) -> Result<PathBuf> {
             }
         }
         debug!("Album art updated from embedded image at {}", pic_path.display());
+        Ok(Some(pic_path))
     } else if let Ok(resp) = c.issue_command(&format!("albumart \"{uri}\" 0")).await {
         // Try cover.jpg instead
         let fields = resp.field_map();
@@ -288,6 +302,7 @@ pub async fn update_album_art(c: &mut MpdClient) -> Result<PathBuf> {
             let size =
                 &fields.get("size").ok_or_else(|| format_err!("bad mpd response: no size"))?[0];
             let binary_size = &fields.get("binary").unwrap()[0];
+            let (pic_path, mut pic_file) = prepare_album_art_file(state).await?;
             pic_file.write_all(&resp.binary.unwrap()).await?;
             if size != binary_size {
                 offset += binary_size.parse::<u64>()?;
@@ -307,13 +322,16 @@ pub async fn update_album_art(c: &mut MpdClient) -> Result<PathBuf> {
                     }
                     offset += binary_size;
                 }
-                debug!("Album art updated from folder cover file at {}", pic_path.display());
+                pic_file.flush().await?;
             }
+            debug!("Album art updated from folder cover file at {}", pic_path.display());
+            Ok(Some(pic_path))
         } else {
-            debug!("No album art found");
+            debug!("Album art not found");
+            Ok(None)
         }
+    } else {
+        debug!("Album art not found");
+        Ok(None)
     }
-    pic_file.flush().await?;
-    debug!("Album art update finished, written {} bytes", offset);
-    Ok(pic_path)
 }

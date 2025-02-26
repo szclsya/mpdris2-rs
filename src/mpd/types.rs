@@ -45,7 +45,7 @@ impl From<&str> for MpdStateChanged {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(dead_code)]
 pub struct MpdState {
     pub playback_state: MpdPlaybackState,
@@ -55,6 +55,7 @@ pub struct MpdState {
     pub playlist_id: Option<u64>,
     pub song: Option<u64>,
     pub song_id: Option<u64>,
+    pub file: Option<String>,
     pub next_song: Option<(u64, u64)>,
     pub playlistlength: u64,
 
@@ -65,7 +66,7 @@ pub struct MpdState {
 impl MpdState {
     pub fn from(
         mut status: HashMap<String, Vec<String>>,
-        metadata: HashMap<String, Vec<String>>,
+        mut metadata: HashMap<String, Vec<String>>,
     ) -> Result<Self> {
         let mut missing_fields = Vec::new();
         let mut get_or_complain = |name: &str| match status.get(name) {
@@ -86,6 +87,16 @@ impl MpdState {
             None => None,
         };
 
+        // file is special in that it's in metadata
+        let file = if let Some(mut value) = metadata.remove("file") {
+            if !value.is_empty() {
+                Some(value.remove(0))
+            } else {
+                bail!("")
+            }
+        } else {
+            None
+        };
         let playlistlength = get_u64("playlistlength");
         let song = get_u64("song");
         let song_id = get_u64("songid");
@@ -138,6 +149,7 @@ impl MpdState {
             playlist_id,
             song,
             song_id,
+            file,
             next_song,
             playlistlength: playlistlength.unwrap_or(0),
             current_song: metadata,

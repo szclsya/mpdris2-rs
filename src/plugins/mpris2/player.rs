@@ -194,7 +194,6 @@ impl PlayerInterface {
             }
         };
 
-        let state = self.mpd_state.read().await;
         if let Some(art) = &state.album_art {
             res.insert("mpris:artUrl".to_owned(), Value::new(format!("file://{}", art.display())));
         }
