@@ -169,12 +169,16 @@ async fn update_status(
     let new_metadata = c.issue_command("currentsong").await?.field_map();
     let mut new = MpdState::from(new_status.field_map(), new_metadata)?;
     let old = state.mpdstate.read().await.clone();
-    // Copy old album art when updating, update_album_art does the cleanup
-    if new.song.is_some() && new.song != old.song {
+    // If there's a song, we will need album art. Decide whether it's up to date in the next step
+    if new.song.is_some() {
+        new.album_art = old.album_art;
+    }
+    // This is the next step
+    if new.song != old.song {
         debug!("Updating cover due to new song id");
         let mut album_art_cache = state.album_art_cache.write().await;
         update_album_art(c, &mut new, &mut album_art_cache).await?;
-    } else if new.song.is_some() && new.current_song.contains_key("Name") && subsystem == "player" {
+    } else if new.current_song.contains_key("Name") && subsystem == "player" {
         debug!("Updating cover due to new ICY tag changed");
         tokio::task::spawn(repeated_update_album_art(query_client, state.clone(), 3, tx.clone()));
     }

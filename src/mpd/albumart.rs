@@ -5,7 +5,7 @@ use super::{
 use crate::types::PlayerStateChange;
 
 use anyhow::{bail, format_err, Result};
-use log::{debug, error, warn, trace};
+use log::{debug, error, trace, warn};
 use std::{
     collections::{HashMap, VecDeque},
     hash::Hasher,

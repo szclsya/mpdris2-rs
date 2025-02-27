@@ -48,6 +48,7 @@ trait Notifications {
 
 struct LastNotification {
     id: u32,
+    summary: String,
     body: String,
     album_art: Option<String>,
     time: Instant,
@@ -55,7 +56,15 @@ struct LastNotification {
 
 impl LastNotification {
     pub fn new() -> Self {
-        LastNotification { id: 0, body: String::new(), album_art: None, time: Instant::now() }
+        // This is to make sure a notification get sent when notificaiton service starts
+        let time = Instant::now().checked_sub(Duration::from_secs(60)).unwrap();
+        LastNotification {
+            id: 0,
+            summary: String::new(),
+            body: String::new(),
+            album_art: None,
+            time,
+        }
     }
 }
 
@@ -136,13 +145,6 @@ impl<'a> FdoNotificationRelay<'a> {
             debug!("Last notification has timed out without server notification. Resetting internal register.");
             last_notification.id = 0;
         }
-        // If last notification is sent within interval, ignore this message
-        // This is a rate-limit measure to prevent this error:
-        // org.freedesktop.Notifications.Error.ExcessNotificationGeneration
-        if last_notification.time.elapsed() < self.notification_interval {
-            debug!("Not sending notification due to rate-limit.");
-            return Ok(());
-        }
 
         debug!(
             "Last notification sent on {:?}, we shouldn't be hitting rate limits",
@@ -150,6 +152,7 @@ impl<'a> FdoNotificationRelay<'a> {
         );
 
         let state = self.state.read().await;
+        eprintln!("{:?}", state);
         let playback_status = state.playback_state.to_string();
         let body = if state.playback_state == MpdPlaybackState::Stopped {
             "Playback stopped".to_string()
@@ -184,8 +187,26 @@ impl<'a> FdoNotificationRelay<'a> {
         };
 
         let album_art = state.album_art.clone().map(|p| format!("file://{}", p.display()));
-        if body == last_notification.body && album_art == last_notification.album_art {
+        // Update last notification
+        last_notification.summary = playback_status.clone();
+        last_notification.body = body.clone();
+        last_notification.album_art = album_art.clone();
+
+        if playback_status != last_notification.summary
+            && body == last_notification.body
+            && album_art == last_notification.album_art
+        {
             debug!("Same notification, not sending");
+            return Ok(());
+        }
+
+        // If last notification is sent within interval, ignore this message
+        // This is a rate-limit measure to prevent this error:
+        // org.freedesktop.Notifications.Error.ExcessNotificationGeneration
+        // This is placed in the end so that even if we hit rate-limit,
+        // last_notification is still correct
+        if last_notification.time.elapsed() < self.notification_interval {
+            debug!("Not sending notification due to rate-limit.");
             return Ok(());
         }
 
@@ -207,11 +228,9 @@ impl<'a> FdoNotificationRelay<'a> {
             )
             .await?;
 
-        debug!("New notification id is {notification_id}");
-        last_notification.id = notification_id;
         last_notification.time = Instant::now();
-        last_notification.body = body;
-        last_notification.album_art = album_art;
+        last_notification.id = notification_id;
+        debug!("New notification id is {notification_id}");
         Ok(())
     }
 }
