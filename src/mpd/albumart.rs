@@ -5,7 +5,7 @@ use super::{
 use crate::types::PlayerStateChange;
 
 use anyhow::{bail, format_err, Result};
-use log::{debug, error, trace};
+use log::{debug, error, warn, trace};
 use std::{
     collections::{HashMap, VecDeque},
     hash::Hasher,
@@ -37,7 +37,7 @@ pub async fn update_album_art(
     };
 
     let hash = hash_metadata(&state.current_song);
-    let path = get_album_art_path(hash);
+    let path = hash_to_album_art_path(hash);
     // Check if we already have this already
     if album_art_cache.contains(&hash) {
         // Just give them the filename and we'd be good
@@ -64,7 +64,11 @@ pub async fn update_album_art(
         // Update cache
         album_art_cache.push_back(hash);
         if album_art_cache.len() > ALBUM_ART_CACHE_SIZE {
-            album_art_cache.pop_front();
+            let hash = album_art_cache.pop_front().unwrap();
+            let old_art_path = hash_to_album_art_path(hash);
+            if let Err(e) = fs::remove_file(&old_art_path).await {
+                warn!("Failed to remove old album art at {}: {e}", old_art_path.display());
+            }
         }
         // Update new album art
         state.album_art = Some(path);
@@ -115,7 +119,8 @@ pub async fn repeated_update_album_art(
                 if let Err(e) = tx.send(PlayerStateChange::CurrentSong) {
                     error!("Failed to broadcast delayed update album art update: {e}");
                 }
-                //break;
+                // Not breaking here since album art in ICY stream might come later,
+                // so we just try multiple times
             }
             Ok(false) => {
                 // Do nothing, try again next time
@@ -143,7 +148,7 @@ fn hash_metadata(metadata: &HashMap<String, Vec<String>>) -> u64 {
     hasher.finish()
 }
 
-fn get_album_art_path(hash: u64) -> PathBuf {
+fn hash_to_album_art_path(hash: u64) -> PathBuf {
     let pic_dir = match dirs::runtime_dir() {
         Some(path) => path,
         None => PathBuf::from("/tmp"),
