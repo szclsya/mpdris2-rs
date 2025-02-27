@@ -11,6 +11,7 @@ pub enum PlayerStateChange {
     // If the current song's metadata is changed
     // Happens when a Internet radios station changes metadata
     CurrentSong,
+    AlbumArt,
     Tracklist,
 }
 

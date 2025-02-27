@@ -130,7 +130,7 @@ impl<'a> FdoNotificationRelay<'a> {
             let event = self.mpd_event_rx.lock().await.recv().await?;
             trace!("New event from state server: {:?}", event);
             match event {
-                Playback | Song | CurrentSong => {
+                Playback | Song | CurrentSong | AlbumArt => {
                     self.send_notification().await?;
                 }
                 _ => (),

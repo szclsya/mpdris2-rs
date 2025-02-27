@@ -6,7 +6,7 @@ use super::{
 use crate::types::{MpdConnectionConfig, PlayerStateChange};
 
 use anyhow::Result;
-use log::{trace, debug, error, warn};
+use log::{debug, error, trace, warn};
 use std::{collections::VecDeque, mem::discriminant, sync::Arc, time::Duration};
 use tokio::{
     spawn,
@@ -16,7 +16,7 @@ use tokio::{
     time::sleep,
 };
 
-const IDLE_CMD: &str = "idle stored_playlist playlist player mixer options";
+const IDLE_CMD: &str = "idle player mixer options";
 const PING_INTERVAL: Duration = Duration::from_secs(55);
 
 pub struct MpdStateServer {
@@ -145,7 +145,7 @@ async fn idle(
         if name == "changed" {
             debug!("Idle interrupted by {}", field.as_str());
             match field.as_str() {
-                "playlist" | "player" | "mixer" | "options" => {
+                "player" | "mixer" | "options" => {
                     update_status(c, query_client.clone(), state, tx, &field).await?
                 }
                 unknown => {
@@ -169,14 +169,24 @@ async fn update_status(
     let new_metadata = c.issue_command("currentsong").await?.field_map();
     let mut new = MpdState::from(new_status.field_map(), new_metadata)?;
     let old = state.mpdstate.read().await.clone();
+
+    let mut delayed_update = false;
     if new.song.is_some() {
         if new.song != old.song {
             debug!("Updating cover due to new song id");
             let mut album_art_cache = state.album_art_cache.write().await;
             update_album_art(c, &mut new, &mut album_art_cache).await?;
         } else if new.current_song.contains_key("Name") && subsystem == "player" {
-            debug!("Updating cover due to new ICY tag changed");
-            tokio::task::spawn(repeated_update_album_art(query_client, state.clone(), 3, tx.clone()));
+            if new.current_song != old.current_song {
+                debug!("Updating cover due to new ICY tag changed");
+                delayed_update = true;
+                tokio::task::spawn(repeated_update_album_art(
+                    query_client,
+                    state.clone(),
+                    3,
+                    tx.clone(),
+                ));
+            }
         } else {
             new.album_art = old.album_art;
         }
@@ -196,7 +206,7 @@ async fn update_status(
     if new.random != old.random {
         tx.send(PlayerStateChange::Shuffle)?;
     }
-    if new.song_id != old.song_id {
+    if new.song_id != old.song_id && !delayed_update {
         tx.send(PlayerStateChange::Song)?;
     }
     if new.next_song != old.next_song {
@@ -208,6 +218,7 @@ async fn update_status(
     if new.song == old.song
         && new.playlistlength == old.playlistlength
         && new.current_song != old.current_song
+        && !delayed_update
     {
         tx.send(PlayerStateChange::CurrentSong)?;
     }

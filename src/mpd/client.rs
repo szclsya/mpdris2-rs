@@ -96,6 +96,8 @@ impl MpdClient {
         let mut hello = String::new();
         new_connection.read_line(&mut hello).await?;
         self.connection = new_connection;
+        // Increase binary chunk size
+        self.issue_command("binarylimit 524288").await?;
         Ok(())
     }
 

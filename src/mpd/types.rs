@@ -53,7 +53,7 @@ impl From<&str> for MpdStateChanged {
 }
 
 pub struct Mpdris2State {
-    pub album_art_cache: Arc<RwLock<VecDeque<u64>>>,
+    pub album_art_cache: Arc<RwLock<VecDeque<(u64, u64)>>>,
     pub album_art_updating: Arc<RwLock<Option<CancellationToken>>>,
     pub mpdstate: Arc<RwLock<MpdState>>,
 }

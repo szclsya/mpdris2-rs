@@ -40,7 +40,7 @@ pub async fn notify_loop(
                 Volume => {
                     player_iface.volume_changed(player_ctxt).await?;
                 }
-                Song | CurrentSong => {
+                Song | CurrentSong | AlbumArt => {
                     player_iface.metadata_changed(player_ctxt).await?;
                     player_iface.playback_status_changed(player_ctxt).await?;
                     player_iface.can_go_next_changed(player_ctxt).await?;
