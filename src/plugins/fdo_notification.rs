@@ -212,6 +212,8 @@ impl<'a> FdoNotificationRelay<'a> {
         let mut hints = self.hints.clone();
         if let Some(album_art) = &album_art {
             hints.insert("image-path", Value::from(album_art));
+        } else {
+            hints.insert("image-path", Value::from(DEFAULT_MPD_ICON_PATH));
         }
         let notification_id = self
             .proxy
