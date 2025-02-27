@@ -36,7 +36,14 @@ fn main() {
 
 async fn try_main() -> Result<()> {
     let args: config::Args = argh::from_env();
-    setup_logger(args.verbose)?;
+    let level = if args.trace {
+        2
+    } else if args.verbose {
+        1
+    } else {
+        0
+    };
+    setup_logger(level)?;
 
     if args.port.is_some() {
         warn!("--port argument has been deprecated. Please add port in the --host argument, or use a UNIX socket.");

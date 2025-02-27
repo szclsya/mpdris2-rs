@@ -22,5 +22,8 @@ pub struct Args {
     pub notification_interval: f32,
     /// verbose
     #[argh(switch, short = 'v')]
-    pub verbose: u8,
+    pub verbose: bool,
+    /// VERY verbose
+    #[argh(switch, short = 'V')]
+    pub trace: bool,
 }
