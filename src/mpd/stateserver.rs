@@ -6,7 +6,7 @@ use super::{
 use crate::types::{MpdConnectionConfig, PlayerStateChange};
 
 use anyhow::Result;
-use log::{debug, error, warn};
+use log::{trace, debug, error, warn};
 use std::{collections::VecDeque, mem::discriminant, sync::Arc, time::Duration};
 use tokio::{
     spawn,
@@ -137,9 +137,9 @@ async fn idle(
     query_client: Arc<Mutex<MpdClient>>,
     tx: &Sender<PlayerStateChange>,
 ) -> Result<()> {
-    debug!("Entering idle...");
+    trace!("Entering idle...");
     let res = c.issue_command(IDLE_CMD).await?;
-    debug!("Idle interrupted");
+    trace!("Idle interrupted");
 
     for (name, field) in res.fields {
         if name == "changed" {

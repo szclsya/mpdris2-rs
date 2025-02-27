@@ -152,7 +152,6 @@ impl<'a> FdoNotificationRelay<'a> {
         );
 
         let state = self.state.read().await;
-        eprintln!("{:?}", state);
         let playback_status = state.playback_state.to_string();
         let body = if state.playback_state == MpdPlaybackState::Stopped {
             "Playback stopped".to_string()
