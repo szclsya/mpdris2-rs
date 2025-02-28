@@ -6,7 +6,7 @@ use crate::mpd::{
 /// Sending MPD activities as notifications
 use crate::types::PlayerStateChange;
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use futures::StreamExt;
 use log::{debug, error, trace};
 use std::{collections::HashMap, default::Default, sync::Arc};
@@ -28,7 +28,6 @@ const MAX_SEGMENT_LEN: usize = 30;
 
 #[proxy(interface = "org.freedesktop.Notifications", assume_defaults = true)]
 trait Notifications {
-    /// Call the org.freedesktop.Notifications.Notify D-Bus method
     fn notify(
         &self,
         app_name: &str,
@@ -41,9 +40,11 @@ trait Notifications {
         expire_timeout: i32,
     ) -> zbus::Result<u32>;
 
-    /// NotificationClosed signal
     #[zbus(signal)]
     fn notification_closed(&self, arg_1: u32, arg_2: u32) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    fn action_invoked(&self, id: u32, action_key: &str) -> zbus::Result<()>;
 }
 
 struct LastNotification {
@@ -70,14 +71,15 @@ impl LastNotification {
 
 pub struct FdoNotificationRelay<'a> {
     proxy: NotificationsProxy<'a>,
-    mpd_event_rx: Mutex<Receiver<PlayerStateChange>>,
+    mpd_event_rx: Mutex<Receiver<Vec<PlayerStateChange>>>,
     state: Arc<RwLock<MpdState>>,
+    client: Arc<Mutex<MpdStateServer>>,
 
     // Settings
     notification_timeout: Duration,
     // Rate-limit settings and internal variables
     notification_interval: Duration,
-    notification_close_signal: Mutex<SignalStream<'a>>,
+    notification_signals: Mutex<SignalStream<'a>>,
     last_notification: Mutex<LastNotification>,
     hints: HashMap<&'a str, Value<'a>>,
 }
@@ -89,12 +91,13 @@ impl<'a> FdoNotificationRelay<'a> {
         notification_interval: Duration,
     ) -> Result<FdoNotificationRelay<'a>> {
         let proxy = NotificationsProxy::new(connection).await?;
-        let notification_close_signal = proxy.0.receive_signal("notification_close").await?;
-        let client = client.lock().await;
-        let mpd_event_rx = client.get_mpd_event_rx();
-        let state = client.get_status();
+        let notification_signals = proxy.0.receive_all_signals().await?;
+        let c = client.lock().await;
+        let mpd_event_rx = c.get_mpd_event_rx();
+        let state = c.get_status();
         let mut hints = HashMap::new();
         hints.insert("urgency", Value::from(0));
+        drop(c);
 
         debug!("FdoNotification min interval set to {:?}", notification_interval);
 
@@ -102,8 +105,9 @@ impl<'a> FdoNotificationRelay<'a> {
             proxy,
             mpd_event_rx: Mutex::new(mpd_event_rx),
             state,
+            client,
             notification_timeout: Duration::from_secs(DEFUALT_NOTIFICATION_DURATION),
-            notification_close_signal: Mutex::new(notification_close_signal),
+            notification_signals: Mutex::new(notification_signals),
             last_notification: Mutex::new(LastNotification::new()),
             hints,
             notification_interval,
@@ -114,26 +118,49 @@ impl<'a> FdoNotificationRelay<'a> {
         Ok(res)
     }
 
-    async fn close_notification(&self) {
-        let mut signal_stream = self.notification_close_signal.lock().await;
+    async fn handle_signals(&self) -> Result<()> {
+        let mut signal_stream = self.notification_signals.lock().await;
         // Wait for a notification_close signal
-        let _ = signal_stream.next().await;
-        debug!("Last notification has been closed, resetting internal register.");
-        let mut last = self.last_notification.lock().await;
-        last.id = 0;
+        if let Some(signal) = signal_stream.next().await {
+            // The signal name is stored in header.member
+            let header = signal.header();
+            let Some(name) = header.member() else {
+                bail!("No name in signal from notification daemon, ignoring");
+            };
+            if name.as_str() == "NotificationClosed" {
+                debug!("Last notification has been closed, resetting internal register.");
+                let mut last = self.last_notification.lock().await;
+                last.id = 0;
+            } else if name.as_str() == "ActionInvoked" {
+                // Read the real action
+                let (_id, body): (u32, String) = signal.body().deserialize()?;
+                let c = self.client.lock().await;
+                match body.as_str() {
+                    "play" => c.issue_command("play").await?,
+                    "play-pause" => c.issue_command("pause").await?,
+                    "next" => c.issue_command("next").await?,
+                    _ => bail!("Invalid notification action"),
+                };
+            }
+        }
+
+        Ok(())
     }
 
     async fn send_notification_on_event(&self) -> Result<()> {
         use PlayerStateChange::*;
         loop {
             trace!("Waiting for MPD state change from NotificationRelay...");
-            let event = self.mpd_event_rx.lock().await.recv().await?;
-            trace!("New event from state server: {:?}", event);
-            match event {
-                Playback | Song | CurrentSong | AlbumArt => {
-                    self.send_notification().await?;
+            let events = self.mpd_event_rx.lock().await.recv().await?;
+            trace!("New events from state server: {:?}", events);
+            for event in events {
+                match event {
+                    Playback | Song | CurrentSong | AlbumArt => {
+                        self.send_notification().await?;
+                        continue;
+                    }
+                    _ => (),
                 }
-                _ => (),
             }
         }
     }
@@ -192,7 +219,7 @@ impl<'a> FdoNotificationRelay<'a> {
                 DEFAULT_MPD_ICON_PATH,
                 &playback_status,
                 &body,
-                &[],
+                generate_actions(&state.playback_state),
                 &hints,
                 self.notification_timeout.as_millis() as i32,
             )
@@ -211,27 +238,26 @@ pub async fn start(
     notification_interval: f32,
 ) -> Result<JoinHandle<()>> {
     let interval = Duration::from_secs_f32(notification_interval);
-    let notification_relay = FdoNotificationRelay::new(connection, mpdclient, interval).await?;
+    let notification_relay = Arc::new(FdoNotificationRelay::new(connection, mpdclient, interval).await?);
+    let nr2 = notification_relay.clone();
     let task = spawn(async move {
         loop {
-            single_run(&notification_relay).await;
+            if let Err(e) = notification_relay.send_notification_on_event().await {
+                error!("NotificationRelay dead, restarting: {e}");
+                sleep(crate::RETRY_INTERVAL).await;
+            }
+        }
+    });
+    let task2 = spawn(async move {
+        loop {
+            eprintln!("bruh");
+            if let Err(e) = nr2.handle_signals().await {
+                error!("Error handling signal from notification daemon: {e}");
+            }
+            eprintln!("bruh out");
         }
     });
     Ok(task)
-}
-
-async fn single_run(notification_relay: &FdoNotificationRelay<'_>) {
-    tokio::select! {
-        res = notification_relay.send_notification_on_event() => {
-            if let Err(e) = res {
-                error!("NotificationRelay dead, restarting. Reason: {e}");
-                sleep(crate::RETRY_INTERVAL).await;
-            }
-        },
-        () = notification_relay.close_notification() => {
-            debug!("Last notification closed based on server signal.");
-        }
-    }
 }
 
 fn generate_body(state: &MpdState) -> String {
@@ -259,6 +285,20 @@ fn generate_body(state: &MpdState) -> String {
         }
     } else {
         todo!()
+    }
+}
+
+fn generate_actions(playback_state: &MpdPlaybackState) -> &[&'static str] {
+    match playback_state {
+        MpdPlaybackState::Stopped => {
+            &["play", "⏵"]
+        },
+        MpdPlaybackState::Playing(_) => {
+            &["play-pause", "⏸", "next", "⏭"]
+        },
+        MpdPlaybackState::Paused(_) => {
+            &["play-pause", "⏵", "next", "⏭"]
+        },
     }
 }
 

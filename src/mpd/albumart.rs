@@ -87,7 +87,7 @@ pub async fn repeated_update_album_art(
     query_client: Arc<Mutex<MpdClient>>,
     state: Arc<Mpdris2State>,
     retry: u8,
-    tx: Sender<PlayerStateChange>,
+    tx: Sender<Vec<PlayerStateChange>>,
 ) {
     // Check current state
     if let Some(token) = state.album_art_updating.read().await.as_ref() {
@@ -126,7 +126,7 @@ pub async fn repeated_update_album_art(
                     continue;
                 }
                 // Declare we just updated album art
-                if let Err(e) = tx.send(PlayerStateChange::AlbumArt) {
+                if let Err(e) = tx.send(vec![PlayerStateChange::AlbumArt]) {
                     error!("Failed to broadcast delayed update album art update: {e}");
                 }
 

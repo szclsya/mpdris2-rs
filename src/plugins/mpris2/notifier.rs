@@ -10,7 +10,7 @@ use zvariant::ObjectPath;
 
 pub async fn notify_loop(
     c: &Connection,
-    rx: &mut Receiver<PlayerStateChange>,
+    rx: &mut Receiver<Vec<PlayerStateChange>>,
     client: &Arc<Mutex<MpdStateServer>>,
 ) -> Result<()> {
     use PlayerStateChange::*;
@@ -25,7 +25,8 @@ pub async fn notify_loop(
         let player_iface = player_iface_ref.get_mut().await;
         let player_ctxt = player_iface_ref.signal_emitter();
         let tracklist_ctxt = tracklist_iface_ref.signal_emitter();
-        if let Ok(s) = signal {
+        if let Ok(states) = signal {
+            for s in states {
             match s {
                 Playback => {
                     player_iface.playback_status_changed(player_ctxt).await?;
@@ -77,4 +78,5 @@ pub async fn notify_loop(
             }
         }
     }
+}
 }

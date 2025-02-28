@@ -30,7 +30,7 @@ pub struct MpdStateServer {
     _ping_task: task::JoinHandle<()>,
     _idle_task: task::JoinHandle<()>,
 
-    mpd_event_tx: Sender<PlayerStateChange>,
+    mpd_event_tx: Sender<Vec<PlayerStateChange>>,
 
     // State caches
     state: Arc<Mpdris2State>,
@@ -83,7 +83,7 @@ impl MpdStateServer {
         });
 
         // Create a client that receive MPD state change
-        let (mpd_event_tx, _) = channel(50);
+        let (mpd_event_tx, _) = channel(10);
         let mut idle_client = MpdClient::new(connection_config.clone()).await?;
         let qc2 = query_client.clone();
         let s2 = state.clone();
@@ -102,7 +102,7 @@ impl MpdStateServer {
         Ok(res)
     }
 
-    pub fn get_mpd_event_rx(&self) -> Receiver<PlayerStateChange> {
+    pub fn get_mpd_event_rx(&self) -> Receiver<Vec<PlayerStateChange>> {
         self.mpd_event_tx.subscribe()
     }
 
@@ -164,13 +164,8 @@ impl MpdStateServer {
         let tx = &self.mpd_event_tx;
         update_status(&mut client, self.query_client.clone(), &self.state, tx, "player").await?;
 
-        tx.send(Playback)?;
-        tx.send(Loop)?;
-        tx.send(Shuffle)?;
-        tx.send(Volume)?;
-        tx.send(Song)?;
-        tx.send(NextSong)?;
-        tx.send(Tracklist)?;
+        let state_changes = vec![Playback, Loop, Shuffle, Volume, Song, NextSong, Tracklist];
+        tx.send(state_changes)?;
         Ok(())
     }
 
@@ -187,7 +182,7 @@ async fn idle(
     c: &mut MpdClient,
     state: &Arc<Mpdris2State>,
     query_client: Arc<Mutex<MpdClient>>,
-    tx: &Sender<PlayerStateChange>,
+    tx: &Sender<Vec<PlayerStateChange>>,
 ) -> Result<()> {
     trace!("Entering idle...");
     let res = c.issue_command(IDLE_CMD).await?;
@@ -214,7 +209,7 @@ async fn update_status(
     c: &mut MpdClient,
     query_client: Arc<Mutex<MpdClient>>,
     state: &Arc<types::Mpdris2State>,
-    tx: &Sender<PlayerStateChange>,
+    tx: &Sender<Vec<PlayerStateChange>>,
     subsystem: &str,
 ) -> Result<()> {
     let new_status = c.issue_command("status").await?;
@@ -251,31 +246,35 @@ async fn update_status(
 
     // Compare && send state changes
     let new = state.mpdstate.read().await;
+    let mut changed = Vec::new();
     if discriminant(&new.playback_state) != discriminant(&old.playback_state) {
-        tx.send(PlayerStateChange::Playback)?;
+        changed.push(PlayerStateChange::Playback);
     }
     if new.loop_state != old.loop_state {
-        tx.send(PlayerStateChange::Loop)?;
+        changed.push(PlayerStateChange::Loop);
     }
     if new.random != old.random {
-        tx.send(PlayerStateChange::Shuffle)?;
+        changed.push(PlayerStateChange::Shuffle);
     }
     if new.song_id != old.song_id && !delayed_update {
-        tx.send(PlayerStateChange::Song)?;
+        changed.push(PlayerStateChange::Song);
     }
     if new.next_song != old.next_song {
-        tx.send(PlayerStateChange::NextSong)?;
+        changed.push(PlayerStateChange::NextSong);
     }
     if new.volume != old.volume {
-        tx.send(PlayerStateChange::Volume)?;
+        changed.push(PlayerStateChange::Volume);
     }
     if new.song == old.song
         && new.playlistlength == old.playlistlength
         && new.current_song != old.current_song
         && !delayed_update
     {
-        tx.send(PlayerStateChange::CurrentSong)?;
+        changed.push(PlayerStateChange::CurrentSong);
     }
 
+    if !changed.is_empty() {
+        tx.send(changed)?;
+    }
     Ok(())
 }
