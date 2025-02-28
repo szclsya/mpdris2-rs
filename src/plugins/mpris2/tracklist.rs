@@ -43,12 +43,12 @@ impl<'a> TracklistInterface {
     }
 
     #[zbus()]
-    async fn add_track(&self, _uri: String, _after: ObjectPath<'_>, _set_as_current: bool) {
+    fn add_track(&self, _uri: String, _after: ObjectPath<'_>, _set_as_current: bool) {
         // We don't do that here.jpg
     }
 
     #[zbus()]
-    async fn remove_track(&self, _track: ObjectPath<'_>) {
+    fn remove_track(&self, _track: ObjectPath<'_>) {
         // We don't do that here either
     }
 
@@ -58,13 +58,11 @@ impl<'a> TracklistInterface {
         #[zbus(signal_context)] ctxt: SignalEmitter<'_>,
         track: ObjectPath<'_>,
     ) -> zbus::fdo::Result<()> {
-        let id = if let Some(id) = object_path_to_id(&track) {
-            id
-        } else {
-            return Ok(());
+        let Some(id) = object_path_to_id(&track) else {
+            return Ok(())
         };
 
-        let cmd = format!("playid {}", id);
+        let cmd = format!("playid {id}");
         match self.mpdclient.lock().await.issue_command(&cmd).await {
             Ok(_resp) => {
                 let mut new_metadata = self.get_track_metadata(vec![track.clone()]).await?;
@@ -129,7 +127,7 @@ impl<'a> TracklistInterface {
     }
 
     #[zbus(property)]
-    async fn can_edit_tracks(&self) -> bool {
+    fn can_edit_tracks(&self) -> bool {
         false
     }
 }
@@ -141,7 +139,7 @@ pub async fn get_current_playlist<'a>(
     let mut res = Vec::with_capacity(metadatas.len());
     for metadata in metadatas {
         let mut entry = HashMap::new();
-        to_mpris_metadata(&metadata, &mut entry).map_err(to_fdo_err)?;
+        to_mpris_metadata(&metadata, &mut entry);
         res.push(entry);
     }
 

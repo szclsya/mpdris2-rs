@@ -138,7 +138,7 @@ impl PlayerInterface {
 
     #[zbus()]
     async fn open_uri(&self, uri: &str) {
-        let cmd = format!("add {}", uri);
+        let cmd = format!("add {uri}");
         self.mpdclient.lock().await.issue_command(&cmd).await.ok();
     }
 
@@ -165,12 +165,12 @@ impl PlayerInterface {
     }
 
     #[zbus(property)]
-    async fn rate(&self) -> f64 {
+    fn rate(&self) -> f64 {
         1.0
     }
 
     #[zbus(property)]
-    async fn set_rate(&self, _rate: f64) {}
+    fn set_rate(&self, _rate: f64) {}
 
     #[zbus(property)]
     async fn shuffle(&self) -> bool {
@@ -188,10 +188,7 @@ impl PlayerInterface {
         let state = self.mpd_state.read().await;
         let mut res = HashMap::with_capacity(10);
         if let Some(metadata) = &state.current_song {
-            if let Err(e) = to_mpris_metadata(metadata, &mut res) {
-                error!("org.mpris.MediaPlayer2.Player.Metadata failed: {}", e);
-            }
-
+            to_mpris_metadata(metadata, &mut res);
             if let Some(art) = &state.album_art {
                 res.insert("mpris:artUrl".to_owned(), Value::new(format!("file://{}", art.display())));
             }
@@ -238,12 +235,12 @@ impl PlayerInterface {
     }
 
     #[zbus(property)]
-    async fn minimum_rate(&self) -> f64 {
+    fn minimum_rate(&self) -> f64 {
         1.0
     }
 
     #[zbus(property)]
-    async fn maximum_rate(&self) -> f64 {
+    fn maximum_rate(&self) -> f64 {
         1.0
     }
 
@@ -254,7 +251,7 @@ impl PlayerInterface {
     }
 
     #[zbus(property)]
-    async fn can_go_previous(&self) -> bool {
+    fn can_go_previous(&self) -> bool {
         true
     }
 
@@ -265,17 +262,17 @@ impl PlayerInterface {
     }
 
     #[zbus(property)]
-    async fn can_pause(&self) -> bool {
+    fn can_pause(&self) -> bool {
         true
     }
 
     #[zbus(property)]
-    async fn can_seek(&self) -> bool {
+    fn can_seek(&self) -> bool {
         true
     }
 
     #[zbus(property)]
-    async fn can_control(&self) -> bool {
+    fn can_control(&self) -> bool {
         true
     }
 }

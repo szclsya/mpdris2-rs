@@ -165,7 +165,7 @@ async fn idle(
             debug!("Idle interrupted by {}", field.as_str());
             match field.as_str() {
                 "player" | "mixer" | "options" => {
-                    update_status(c, query_client.clone(), state, tx, &field).await?
+                    update_status(c, query_client.clone(), state, tx, &field).await?;
                 }
                 unknown => {
                     debug!("Unhandled event from mpd: {unknown}");

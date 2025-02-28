@@ -106,7 +106,7 @@ impl MpdClient {
         let mut first_retry = true;
         loop {
             match self.reconnect().await {
-                Ok(_) => {
+                Ok(()) => {
                     info!("Reconnect success.");
                     break;
                 }

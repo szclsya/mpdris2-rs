@@ -6,7 +6,7 @@ use types::MpdConnectionConfig;
 
 const RETRY_INTERVAL: Duration = Duration::from_secs(5);
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use colored::Colorize;
 use fern::colors::{Color, ColoredLevelConfig};
 use futures_util::stream::StreamExt;
@@ -55,12 +55,12 @@ async fn try_main() -> Result<()> {
     let connection_config = match args.host {
         Some(s) => {
             info!("Connecting to specified MPD server: {s}");
-            parse_host_string(&s, args.port).context("failed to parse host")?
+            parse_host_string(&s, args.port)
         }
         None => {
             if let Ok(s) = std::env::var("MPD_HOST") {
                 info!("Connecting to MPD_HOST: {}", s);
-                parse_host_string(&s, None).context("failed to parse MPD_HOST")?
+                parse_host_string(&s, None)
             } else {
                 info!("Connecting to default MPD server: {DEFAULT_MPD_HOST}");
                 MpdConnectionConfig::Tcp(DEFAULT_MPD_HOST.to_owned())
@@ -143,13 +143,13 @@ fn setup_logger(debug: u8) -> Result<()> {
     Ok(())
 }
 
-fn parse_host_string(s: &str, port: Option<u16>) -> Result<MpdConnectionConfig> {
+fn parse_host_string(s: &str, port: Option<u16>) -> MpdConnectionConfig {
     if s.starts_with('/') {
         // UNIX socket
         let path = PathBuf::from(s);
-        Ok(MpdConnectionConfig::Socket(path))
+        MpdConnectionConfig::Socket(path)
     } else {
         let addr = if let Some(port) = port { format!("{s}:{port}") } else { s.to_owned() };
-        Ok(MpdConnectionConfig::Tcp(addr))
+        MpdConnectionConfig::Tcp(addr)
     }
 }

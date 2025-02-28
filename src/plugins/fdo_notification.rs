@@ -156,9 +156,9 @@ impl<'a> FdoNotificationRelay<'a> {
         let body = generate_body(&state);
         let album_art = state.album_art.clone().map(|p| format!("file://{}", p.display()));
         // Update last notification
-        last_notification.summary = playback_status.clone();
-        last_notification.body = body.clone();
-        last_notification.album_art = album_art.clone();
+        last_notification.summary.clone_from(&playback_status);
+        last_notification.body.clone_from(&body);
+        last_notification.album_art.clone_from(&album_art);
 
         if playback_status != last_notification.summary
             && body == last_notification.body
@@ -228,7 +228,7 @@ async fn single_run(notification_relay: &FdoNotificationRelay<'_>) {
                 sleep(crate::RETRY_INTERVAL).await;
             }
         },
-        _ = notification_relay.close_notification() => {
+        () = notification_relay.close_notification() => {
             debug!("Last notification closed based on server signal.");
         }
     }

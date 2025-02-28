@@ -31,9 +31,7 @@ pub async fn update_album_art(
     state: &mut MpdState,
     album_art_cache: &mut VecDeque<(u64, u64)>,
 ) -> Result<Option<u64>> {
-    let metadata = if let Some(metadata) = &state.current_song {
-        metadata
-    } else {
+    let Some(metadata) = &state.current_song else {
         bail!("No `file` in currentsong!");
     };
     let uri = &metadata.uri;
@@ -109,8 +107,8 @@ pub async fn repeated_update_album_art(
         i += 1;
 
         tokio::select! {
-            _ = cancel.cancelled() => { trace!("Repeated album art update cancelled"); break},
-            _ = sleep(Duration::from_millis(retrieve_interval)) => (),
+            () = cancel.cancelled() => { trace!("Repeated album art update cancelled"); break},
+            () = sleep(Duration::from_millis(retrieve_interval)) => (),
         };
 
         // Try to update album art

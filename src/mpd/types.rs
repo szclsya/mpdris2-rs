@@ -262,7 +262,6 @@ impl MpdLoopState {
     pub fn from_str(s: &str) -> Self {
         use MpdLoopState::*;
         match s {
-            "None" => None,
             "Track" => Track,
             "Playlist" => Playlist,
             _ => None,

@@ -1,4 +1,3 @@
-use anyhow::Result;
 use std::collections::HashMap;
 use zvariant::{ObjectPath, Value};
 
@@ -21,7 +20,7 @@ pub fn object_path_to_id(path: &ObjectPath) -> Option<u64> {
 pub fn to_mpris_metadata(
     i: &SongMetadata,
     buf: &mut HashMap<String, Value<'_>>
-) -> Result<()> {
+) {
     let mut optional_insert = |tag: &str, src: &Option<String>| {
         if let Some(value) = src {
             buf.insert(tag.to_owned(), Value::new(value.to_owned()));
@@ -46,8 +45,6 @@ pub fn to_mpris_metadata(
     if i.title.is_none() {
         buf.insert("xesam:title".to_owned(), Value::new(find_filename_from_relpath(&i.uri).to_owned()));
     }
-
-    Ok(())
 }
 
 fn find_filename_from_relpath(i: &str) -> &str {

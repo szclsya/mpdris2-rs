@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use nom::{
     bytes::complete::{tag, take_till},
-    character::complete::*,
+    character::complete::{char, digit1, space1},
     AsChar, Err, IResult, Input,
 };
 use thiserror::Error;
@@ -55,7 +55,7 @@ pub fn parse_error_line(i: &str) -> Result<MpdError> {
                 let pos = i.len() - e.input.len();
                 bail!("error at {pos} ({i})")
             }
-            _ => bail!("internal error while parsing mpd error line"),
+            Err::Failure(e) => bail!("internal error while parsing mpd error line: {e}"),
         },
     };
 
