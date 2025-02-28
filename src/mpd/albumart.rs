@@ -7,7 +7,7 @@ use crate::types::PlayerStateChange;
 use anyhow::{bail, format_err, Result};
 use log::{debug, error, trace, warn};
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::VecDeque,
     hash::Hasher,
     path::PathBuf,
     sync::Arc,
@@ -25,23 +25,20 @@ use tokio_util::sync::CancellationToken;
 use twox_hash::XxHash3_64;
 
 const ALBUM_ART_CACHE_SIZE: usize = 20;
-// ASCII code of "mpdris2-rs" added together
-const XXHASH_SEED: u64 = 979;
-const HASHED_METADATA_FIELDS: &[&str] =
-    &["Album", "AlbumArtist", "Artist", "Comment", "Composer", "Disc", "Genre", "Title", "Track"];
 
 pub async fn update_album_art(
     c: &mut MpdClient,
     state: &mut MpdState,
     album_art_cache: &mut VecDeque<(u64, u64)>,
 ) -> Result<Option<u64>> {
-    let uri = if let Some(uri) = &state.file {
-        uri
+    let metadata = if let Some(metadata) = &state.current_song {
+        metadata
     } else {
         bail!("No `file` in currentsong!");
     };
+    let uri = &metadata.uri;
 
-    let name_hash = hash_metadata(&state.current_song);
+    let name_hash = metadata.xxhash3_64();
     let path = hash_to_album_art_path(name_hash);
     // Check if we already have this already
     for (name_hash_l, pic_hash_l) in album_art_cache.iter() {
@@ -108,9 +105,8 @@ pub async fn repeated_update_album_art(
         trace!("Running repeated album art update: {i}/{retry}");
         if i == retry {
             break;
-        } else {
-            i += 1;
         }
+        i += 1;
 
         tokio::select! {
             _ = cancel.cancelled() => { trace!("Repeated album art update cancelled"); break},
@@ -151,21 +147,6 @@ pub async fn repeated_update_album_art(
     trace!("Repeated album art update done.");
 }
 
-// Calculate a hash for a song
-fn hash_metadata(metadata: &HashMap<String, Vec<String>>) -> u64 {
-    let mut hasher = XxHash3_64::with_seed(XXHASH_SEED);
-    for (k, v) in metadata {
-        if !HASHED_METADATA_FIELDS.contains(&k.as_str()) {
-            continue;
-        }
-        hasher.write(k.as_bytes());
-        for v in v {
-            hasher.write(v.as_bytes());
-        }
-    }
-    hasher.finish()
-}
-
 fn hash_to_album_art_path(hash: u64) -> PathBuf {
     let pic_dir = match dirs::runtime_dir() {
         Some(path) => path,
@@ -200,7 +181,7 @@ async fn mpd_binary_to_file(
     let fields = resp.field_map();
     let mut offset: u64 = 0;
     if fields.contains_key("binary") {
-        let mut hasher = XxHash3_64::with_seed(XXHASH_SEED);
+        let mut hasher = XxHash3_64::with_seed(crate::XXHASH3_64_SEED);
         let size = &fields.get("size").ok_or_else(|| format_err!("bad mpd response: no size"))?[0];
         let binary_size = &fields.get("binary").unwrap()[0];
         let mut pic_file = prepare_album_art_file(path).await?;

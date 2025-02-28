@@ -1,7 +1,8 @@
 use anyhow::Result;
-use log::{debug, error};
-use std::{collections::HashMap, time::Duration};
+use std::collections::HashMap;
 use zvariant::{ObjectPath, Value};
+
+use crate::types::SongMetadata;
 
 pub fn id_to_object_path<'a>(id: impl std::fmt::Display) -> ObjectPath<'a> {
     let path = format!("/org/musicpd/song/{id}");
@@ -17,102 +18,36 @@ pub fn object_path_to_id(path: &ObjectPath) -> Option<u64> {
     None
 }
 
-pub fn to_mpris_metadata<'a>(
-    mut i: HashMap<String, Vec<String>>,
-) -> Result<HashMap<String, Value<'a>>> {
-    // Run the preprocessor first. Contains quirks
-    preprocessor(&mut i);
-
-    let mut res = HashMap::new();
-
-    let i = &mut i;
-    let r = &mut res;
-    if let Some(id) = i.remove("Id") {
-        let object_id = id_to_object_path(&id[0]);
-        r.insert("mpris:trackid".to_string(), Value::new(object_id));
-    }
-    if let Some(length) = i.remove("duration") {
-        let length: f64 = length[0].parse()?;
-        let t = Duration::from_secs_f64(length);
-        r.insert("mpris:length".to_owned(), Value::new(t.as_micros() as u64));
-    }
-    // TODO: Create URI
-    convert_str_tag(i, r, "Album", "xesam:album");
-    convert_str_array_tag(i, r, "AlbumArtist", "xesam:albumArtist");
-    convert_str_array_tag(i, r, "Artist", "xesam:artist");
-    // TODO: Lyrics
-    convert_str_array_tag(i, r, "Comment", "xesam:comment");
-    convert_str_array_tag(i, r, "Composer", "xesam:composer");
-    convert_str_tag(i, r, "Disc", "xesam:discNumber");
-    convert_str_tag(i, r, "Genre", "xesam:genre");
-    convert_str_tag(i, r, "Title", "xesam:title");
-    convert_int_tag(i, r, "Track", "xesam:trackNumber");
-    if let Some(mut value) = i.remove("file") {
-        let r = value.remove(0);
-
-        // Use filename as title, if title doesn't exist
-        let title = find_filename_from_relpath(&r);
-        res.entry("xesam:title".to_owned()).or_insert_with(|| Value::new(title.to_owned()));
-
-        res.insert("xesam:url".to_owned(), Value::new(r));
-    }
-
-    Ok(res)
-}
-
-// A list things to do before converting tags
-fn preprocessor(i: &mut HashMap<String, Vec<String>>) {
-    // HACK: If `Artist`, `Album`, `Genre` and `Track` doesn't exist, but `Name` do,
-    //       this is likely to be a icecast station. Use `Name` as `Album`
-    if !i.contains_key("Artist")
-        && !i.contains_key("Album")
-        && !i.contains_key("Genre")
-        && !i.contains_key("Track")
-        && i.contains_key("Name")
-    {
-        debug!("Seems that we are playing a icy stream, showing `Name` as `Album` in MPRIS2");
-        i.insert("Album".to_owned(), i.get("Name").unwrap().clone());
-    }
-}
-
-fn convert_str_tag(
-    i: &mut HashMap<String, Vec<String>>,
-    res: &mut HashMap<String, Value>,
-    mpd_key: &str,
-    mpris_key: &str,
-) {
-    if let Some(mut value) = i.remove(mpd_key) {
-        let r = value.remove(0);
-        res.insert(mpris_key.to_owned(), Value::new(r));
-    }
-}
-
-fn convert_str_array_tag(
-    i: &mut HashMap<String, Vec<String>>,
-    res: &mut HashMap<String, Value>,
-    mpd_key: &str,
-    mpris_key: &str,
-) {
-    if let Some(mut value) = i.remove(mpd_key) {
-        value.dedup();
-        res.insert(mpris_key.to_owned(), Value::new(value));
-    }
-}
-
-fn convert_int_tag(
-    i: &mut HashMap<String, Vec<String>>,
-    res: &mut HashMap<String, Value>,
-    mpd_key: &str,
-    mpris_key: &str,
-) {
-    if let Some(value) = i.remove(mpd_key) {
-        let value = &value[0];
-        if let Ok(r) = value.parse::<i64>() {
-            res.insert(mpris_key.to_owned(), Value::new(r));
-        } else {
-            error!("can't parse metadata tag {mpd_key} -> {mpris_key} with value {value}");
+pub fn to_mpris_metadata(
+    i: &SongMetadata,
+    buf: &mut HashMap<String, Value<'_>>
+) -> Result<()> {
+    let mut optional_insert = |tag: &str, src: &Option<String>| {
+        if let Some(value) = src {
+            buf.insert(tag.to_owned(), Value::new(value.to_owned()));
         }
+    };
+    optional_insert("xesam:title", &i.title);
+    optional_insert("xesam:album", &i.album);
+    optional_insert("xesam:albumArtist", &i.album_artist);
+    optional_insert("xesam:artist", &i.artist);
+    optional_insert("xesam:composer", &i.composer);
+    optional_insert("xesam:discNumber", &i.disc);
+    optional_insert("xesam:genre", &i.genre);
+    optional_insert("xesam:trackNumber", &i.track);
+
+    // Special types
+    buf.insert("mpris:trackid".to_owned(), Value::new(id_to_object_path(i.id)));
+    buf.insert("xesam:url".to_owned(), Value::new(i.uri.clone()));
+    if let Some(value) = i.duration {
+        buf.insert("mpris:length".to_owned(), Value::new(value.as_micros() as u64));
     }
+    // Use filename as title if no title is declared
+    if i.title.is_none() {
+        buf.insert("xesam:title".to_owned(), Value::new(find_filename_from_relpath(&i.uri).to_owned()));
+    }
+
+    Ok(())
 }
 
 fn find_filename_from_relpath(i: &str) -> &str {

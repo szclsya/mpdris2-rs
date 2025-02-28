@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Result, Context};
 use log::warn;
 use std::path::PathBuf;
 use std::{
@@ -9,6 +9,8 @@ use std::{
 };
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
+
+use crate::types::SongMetadata;
 
 // A list of fields + optional binary data
 #[derive(Debug)]
@@ -68,11 +70,10 @@ pub struct MpdState {
     pub playlist_id: Option<u64>,
     pub song: Option<u64>,
     pub song_id: Option<u64>,
-    pub file: Option<String>,
     pub next_song: Option<(u64, u64)>,
     pub playlistlength: u64,
 
-    pub current_song: HashMap<String, Vec<String>>,
+    pub current_song: Option<SongMetadata>,
     pub album_art: Option<PathBuf>,
 }
 
@@ -100,16 +101,6 @@ impl MpdState {
             None => None,
         };
 
-        // file is special in that it's in metadata
-        let file = if let Some(mut value) = metadata.remove("file") {
-            if !value.is_empty() {
-                Some(value.remove(0))
-            } else {
-                bail!("")
-            }
-        } else {
-            None
-        };
         let playlistlength = get_u64("playlistlength");
         let song = get_u64("song");
         let song_id = get_u64("songid");
@@ -162,15 +153,63 @@ impl MpdState {
             playlist_id,
             song,
             song_id,
-            file,
             next_song,
             playlistlength: playlistlength.unwrap_or(0),
-            current_song: metadata,
+            current_song: hashmap_to_song_metadata(&mut metadata)?,
             album_art: None,
         };
 
         Ok(res)
     }
+}
+
+pub fn hashmap_to_song_metadata(src: &mut HashMap<String, Vec<String>>) -> Result<Option<SongMetadata>> {
+    let uri = if let Some(mut uri) = src.remove("file") {
+        uri.remove(0)
+    } else {
+        return Ok(None);
+    };
+
+    let id = if let Some(id_str) = src.remove("Id") {
+        id_str[0].parse::<u64>().context("Failed to parse `Id` in currentsong")?
+    } else {
+        bail!("No `Id` in currentsong but file is present")
+    };
+    let duration = if let Some(value) = src.remove("duration") {
+        let duration = value[0].parse::<f32>().context("Failed to parse `duration in currentsong")?;
+        Some(Duration::from_secs_f32(duration))
+    } else {
+        None
+    };
+
+    let mut get_value = |key: &str| {
+        if let Some(mut value) = src.remove(key) {
+            if value.is_empty() {
+                None
+            } else {
+                value.dedup();
+                Some(value.remove(0))
+            }
+        } else {
+            None
+        }
+    };
+    let res = SongMetadata {
+        uri,
+        id,
+        duration,
+        name: get_value("Name"),
+        title: get_value("Title"),
+        album: get_value("Album"),
+        album_artist: get_value("AlbumArtist"),
+        artist: get_value("Artist"),
+        composer: get_value("Composer"),
+        genre: get_value("Genre"),
+        disc: get_value("Disc"),
+        track: get_value("Track"),
+        comment: get_value("Comment"),
+    };
+    Ok(Some(res))
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]

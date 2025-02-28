@@ -153,38 +153,7 @@ impl<'a> FdoNotificationRelay<'a> {
 
         let state = self.state.read().await;
         let playback_status = state.playback_state.to_string();
-        let body = if state.playback_state == MpdPlaybackState::Stopped {
-            "Playback stopped".to_string()
-        } else {
-            let metadata = &state.current_song;
-            let title = metadata.get("Title").map(|list| list[0].as_str());
-            let album = metadata.get("Album").map(|list| list[0].as_str());
-            let artist = metadata.get("Artist").map(|list| list[0].as_str());
-            // MPD removes the `icy` part of the ICY tag used by internet radios,
-            // thus icy_name becomes just "Name"
-            // Hopefully nobody is using this tag in local music
-            let name = metadata.get("Name").map(|list| list[0].as_str());
-            if title.is_none() && artist.is_none() {
-                metadata.get("file").map_or("Unknown", |l| l[0].as_str()).to_owned()
-            } else {
-                let title = title.unwrap_or("Unknown Song");
-                let mut res = format!("<b>{}</b>", escape_notification_str(title));
-                if let Some(artist) = artist {
-                    let artist = trim_display_str(artist, MAX_SEGMENT_LEN);
-                    res.push_str(&format!("\n{}", escape_notification_str(&artist)));
-                }
-                if let Some(album) = album {
-                    let album = trim_display_str(album, MAX_SEGMENT_LEN);
-                    res.push_str(&format!("\n{}", escape_notification_str(&album)));
-                }
-                if let Some(name) = name {
-                    let name = trim_display_str(name, MAX_SEGMENT_LEN);
-                    res.push_str(&format!("\n{}", escape_notification_str(&name)));
-                }
-                res
-            }
-        };
-
+        let body = generate_body(&state);
         let album_art = state.album_art.clone().map(|p| format!("file://{}", p.display()));
         // Update last notification
         last_notification.summary = playback_status.clone();
@@ -262,6 +231,34 @@ async fn single_run(notification_relay: &FdoNotificationRelay<'_>) {
         _ = notification_relay.close_notification() => {
             debug!("Last notification closed based on server signal.");
         }
+    }
+}
+
+fn generate_body(state: &MpdState) -> String {
+    if state.playback_state == MpdPlaybackState::Stopped {
+        "Playback stopped".to_string()
+    } else if let Some(metadata) = &state.current_song {
+        if metadata.title.is_none() && metadata.artist.is_none() {
+            metadata.uri.to_owned()
+        } else {
+            let title = metadata.title.as_deref().unwrap_or("Unknown Song");
+            let mut res = format!("<b>{}</b>", escape_notification_str(title));
+            if let Some(artist) = &metadata.artist {
+                let artist = trim_display_str(artist, MAX_SEGMENT_LEN);
+                res.push_str(&format!("\n{}", escape_notification_str(&artist)));
+            }
+            if let Some(album) = &metadata.album {
+                let album = trim_display_str(album, MAX_SEGMENT_LEN);
+                res.push_str(&format!("\n{}", escape_notification_str(&album)));
+            }
+            if let Some(name) = &metadata.name {
+                let name = trim_display_str(name, MAX_SEGMENT_LEN);
+                res.push_str(&format!("\n{}", escape_notification_str(&name)));
+            }
+            res
+        }
+    } else {
+        todo!()
     }
 }
 

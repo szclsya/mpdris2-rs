@@ -17,6 +17,8 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 use tokio::{runtime, sync::Mutex, time::sleep};
 
 const DEFAULT_MPD_HOST: &str = "localhost:6600";
+// ASCII code of "mpdris2-rs" added together
+const XXHASH3_64_SEED: u64 = 979;
 
 fn main() {
     let rt = match runtime::Builder::new_current_thread().enable_io().enable_time().build() {

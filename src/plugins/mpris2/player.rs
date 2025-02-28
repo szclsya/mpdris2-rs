@@ -186,16 +186,15 @@ impl PlayerInterface {
     #[zbus(property)]
     async fn metadata(&self) -> HashMap<String, Value<'_>> {
         let state = self.mpd_state.read().await;
-        let mut res = match to_mpris_metadata(state.current_song.clone()) {
-            Ok(res) => res,
-            Err(e) => {
+        let mut res = HashMap::with_capacity(10);
+        if let Some(metadata) = &state.current_song {
+            if let Err(e) = to_mpris_metadata(metadata, &mut res) {
                 error!("org.mpris.MediaPlayer2.Player.Metadata failed: {}", e);
-                HashMap::new()
             }
-        };
 
-        if let Some(art) = &state.album_art {
-            res.insert("mpris:artUrl".to_owned(), Value::new(format!("file://{}", art.display())));
+            if let Some(art) = &state.album_art {
+                res.insert("mpris:artUrl".to_owned(), Value::new(format!("file://{}", art.display())));
+            }
         }
         res
     }

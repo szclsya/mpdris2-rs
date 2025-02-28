@@ -137,22 +137,15 @@ impl<'a> TracklistInterface {
 pub async fn get_current_playlist<'a>(
     client: Arc<Mutex<MpdStateServer>>,
 ) -> zbus::fdo::Result<Vec<HashMap<std::string::String, zvariant::Value<'a>>>> {
-    let res = client.lock().await.issue_command("playlistinfo").await.map_err(to_fdo_err)?;
-
-    let mut metadatas = Vec::new();
-
-    let mut buf = HashMap::new();
-    for (name, value) in res.fields {
-        buf.entry(name.clone()).or_insert_with(|| vec![value.clone()]).push(value.clone());
-        if name == "Id" {
-            let mut new_buf = HashMap::new();
-            std::mem::swap(&mut buf, &mut new_buf);
-            let new_metadata = to_mpris_metadata(new_buf).map_err(to_fdo_err)?;
-            metadatas.push(new_metadata);
-        }
+    let metadatas = client.lock().await.get_playlist().await.map_err(to_fdo_err)?;
+    let mut res = Vec::with_capacity(metadatas.len());
+    for metadata in metadatas {
+        let mut entry = HashMap::new();
+        to_mpris_metadata(&metadata, &mut entry).map_err(to_fdo_err)?;
+        res.push(entry);
     }
 
-    Ok(metadatas)
+    Ok(res)
 }
 
 pub fn extract_ids_from_metadata<'a>(

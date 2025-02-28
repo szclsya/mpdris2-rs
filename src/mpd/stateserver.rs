@@ -1,13 +1,13 @@
 use super::{
     albumart::*,
-    types::{self, MpdState, Mpdris2State},
+    types::{self, MpdState, Mpdris2State, hashmap_to_song_metadata},
     MpdClient,
 };
-use crate::types::{MpdConnectionConfig, PlayerStateChange};
+use crate::types::{MpdConnectionConfig, PlayerStateChange, SongMetadata};
 
 use anyhow::Result;
 use log::{debug, error, trace, warn};
-use std::{collections::VecDeque, mem::discriminant, sync::Arc, time::Duration};
+use std::{collections::{VecDeque, HashMap}, mem::discriminant, sync::Arc, time::Duration};
 use tokio::{
     spawn,
     sync::broadcast::{channel, Receiver, Sender},
@@ -100,6 +100,25 @@ impl MpdStateServer {
         Ok(())
     }
 
+    pub async fn get_playlist(&mut self) -> Result<Vec<SongMetadata>> {
+        let mut res = Vec::new();
+
+        let response = self.issue_command("playlistinfo").await?;
+        let mut buf = HashMap::new();
+        for (key, value) in response.fields {
+            if key == "file" && !buf.is_empty() {
+                // We've just entered a new song, parse previous buffer to a song metadata
+                let metadata = hashmap_to_song_metadata(&mut buf)?;
+                if let Some(metadata) = metadata {
+                    res.push(metadata);
+                }
+            }
+            buf.entry(key.clone()).or_insert_with(|| vec![value.clone()]).push(value.clone());
+        }
+
+        Ok(res)
+    }
+
     pub async fn issue_command(&self, cmd: &str) -> Result<types::MpdResponse> {
         let mut client = self.query_client.lock().await;
         let resp = client.issue_command(cmd).await;
@@ -171,12 +190,12 @@ async fn update_status(
     let old = state.mpdstate.read().await.clone();
 
     let mut delayed_update = false;
-    if new.song.is_some() {
+    if let Some(new_metadata) = &new.current_song {
         if new.song != old.song {
             debug!("Updating cover due to new song id");
             let mut album_art_cache = state.album_art_cache.write().await;
             update_album_art(c, &mut new, &mut album_art_cache).await?;
-        } else if new.current_song.contains_key("Name") && subsystem == "player" {
+        } else if new_metadata.name.is_some() && subsystem == "player" {
             if new.current_song != old.current_song {
                 debug!("Updating cover due to new ICY tag changed");
                 delayed_update = true;
