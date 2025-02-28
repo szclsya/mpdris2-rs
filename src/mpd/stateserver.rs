@@ -117,6 +117,14 @@ impl MpdStateServer {
         Ok(())
     }
 
+    pub async fn get_track(&mut self, id: u64) -> Result<Option<SongMetadata>> {
+        let response = self.issue_command(&format!("playlistid {id}")).await?;
+        let mut hashmap: HashMap<String, Vec<String>> =
+            response.fields.into_iter().map(|d| (d.0, vec![d.1])).collect();
+        let metadata = hashmap_to_song_metadata(&mut hashmap)?;
+        Ok(metadata)
+    }
+
     pub async fn get_playlist(&mut self) -> Result<Vec<SongMetadata>> {
         let mut res = Vec::new();
 

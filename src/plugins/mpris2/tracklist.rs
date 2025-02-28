@@ -2,7 +2,8 @@ use super::utils::*;
 /// `TrackList` interface (org.mpris.MediaPlayer2.TrackList) implementation
 use crate::mpd::MpdStateServer;
 
-use log::error;
+use anyhow::{format_err, Context};
+use log::{error, warn};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 use zbus::{interface, object_server::SignalEmitter};
@@ -27,19 +28,28 @@ impl<'a> TracklistInterface {
     ) -> zbus::fdo::Result<Vec<HashMap<String, Value<'a>>>> {
         let ids: Vec<Value<'_>> = tracks.into_iter().map(Value::new).collect();
 
-        let metadatas = get_current_playlist(self.mpdclient.clone()).await?;
-        let metadatas = metadatas
-            .into_iter()
-            .filter(|metadatas| {
-                if let Some(path) = metadatas.get("mpris:trackid") {
-                    ids.contains(path)
-                } else {
-                    false
-                }
-            })
-            .collect();
-
-        Ok(metadatas)
+        let mut res = Vec::new();
+        for id in ids {
+            let Value::ObjectPath(obj_path) = id else {
+                return Err(to_fdo_err(format_err!("Invalid song id")));
+            };
+            // Extract id
+            let id = if let Some(id_str) = obj_path.as_str().strip_prefix("/org/musicpd/song/") {
+                id_str.parse::<u64>().context("Invalid song id").map_err(to_fdo_err)?
+            } else {
+                return Err(to_fdo_err(format_err!("Invalid song id")));
+            };
+            if let Some(metadata) =
+                self.mpdclient.lock().await.get_track(id).await.map_err(to_fdo_err)?
+            {
+                let mut mpris_metadata = HashMap::new();
+                to_mpris_metadata(&metadata, &mut mpris_metadata);
+                res.push(mpris_metadata);
+            } else {
+                warn!("MPRIS2 requested track {id} but it doesn't seem to exist, skipping");
+            }
+        }
+        Ok(res)
     }
 
     #[zbus()]
