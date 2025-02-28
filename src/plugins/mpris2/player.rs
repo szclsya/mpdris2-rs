@@ -190,7 +190,10 @@ impl PlayerInterface {
         if let Some(metadata) = &state.current_song {
             to_mpris_metadata(metadata, &mut res);
             if let Some(art) = &state.album_art {
-                res.insert("mpris:artUrl".to_owned(), Value::new(format!("file://{}", art.display())));
+                res.insert(
+                    "mpris:artUrl".to_owned(),
+                    Value::new(format!("file://{}", art.display())),
+                );
             }
         }
         res

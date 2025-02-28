@@ -114,6 +114,7 @@ async fn try_main() -> Result<()> {
     if let Some(_signal) = signals.next().await {
         info!("Exit signal received, closing D-Bus connection");
         handle.close();
+        mpd_state_server.lock().await.cleanup().await?;
     }
 
     Ok(())

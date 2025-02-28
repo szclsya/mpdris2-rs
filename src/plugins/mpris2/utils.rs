@@ -17,10 +17,7 @@ pub fn object_path_to_id(path: &ObjectPath) -> Option<u64> {
     None
 }
 
-pub fn to_mpris_metadata(
-    i: &SongMetadata,
-    buf: &mut HashMap<String, Value<'_>>
-) {
+pub fn to_mpris_metadata(i: &SongMetadata, buf: &mut HashMap<String, Value<'_>>) {
     let mut optional_insert = |tag: &str, src: &Option<String>| {
         if let Some(value) = src {
             buf.insert(tag.to_owned(), Value::new(value.to_owned()));
@@ -43,7 +40,10 @@ pub fn to_mpris_metadata(
     }
     // Use filename as title if no title is declared
     if i.title.is_none() {
-        buf.insert("xesam:title".to_owned(), Value::new(find_filename_from_relpath(&i.uri).to_owned()));
+        buf.insert(
+            "xesam:title".to_owned(),
+            Value::new(find_filename_from_relpath(&i.uri).to_owned()),
+        );
     }
 }
 

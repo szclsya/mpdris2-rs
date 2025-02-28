@@ -58,9 +58,7 @@ impl<'a> TracklistInterface {
         #[zbus(signal_context)] ctxt: SignalEmitter<'_>,
         track: ObjectPath<'_>,
     ) -> zbus::fdo::Result<()> {
-        let Some(id) = object_path_to_id(&track) else {
-            return Ok(())
-        };
+        let Some(id) = object_path_to_id(&track) else { return Ok(()) };
 
         let cmd = format!("playid {id}");
         match self.mpdclient.lock().await.issue_command(&cmd).await {

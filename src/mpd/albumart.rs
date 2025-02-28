@@ -9,7 +9,7 @@ use log::{debug, error, trace, warn};
 use std::{
     collections::VecDeque,
     hash::Hasher,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
 };
@@ -29,6 +29,7 @@ const ALBUM_ART_CACHE_SIZE: usize = 20;
 pub async fn update_album_art(
     c: &mut MpdClient,
     state: &mut MpdState,
+    album_art_dir: &Path,
     album_art_cache: &mut VecDeque<(u64, u64)>,
 ) -> Result<Option<u64>> {
     let Some(metadata) = &state.current_song else {
@@ -37,7 +38,7 @@ pub async fn update_album_art(
     let uri = &metadata.uri;
 
     let name_hash = metadata.xxhash3_64();
-    let path = hash_to_album_art_path(name_hash);
+    let path = hash_to_album_art_path(album_art_dir, name_hash);
     // Check if we already have this already
     for (name_hash_l, pic_hash_l) in album_art_cache.iter() {
         if *name_hash_l == name_hash {
@@ -67,7 +68,7 @@ pub async fn update_album_art(
         album_art_cache.push_back((name_hash, pic_hash));
         if album_art_cache.len() > ALBUM_ART_CACHE_SIZE {
             let (old_name_hash, _) = album_art_cache.pop_front().unwrap();
-            let old_art_path = hash_to_album_art_path(old_name_hash);
+            let old_art_path = hash_to_album_art_path(album_art_dir, old_name_hash);
             if let Err(e) = fs::remove_file(&old_art_path).await {
                 warn!("Failed to remove old album art at {}: {e}", old_art_path.display());
             }
@@ -115,7 +116,9 @@ pub async fn repeated_update_album_art(
         let mut c = query_client.lock().await;
         let mut mpdstate = state.mpdstate.write().await;
         let mut album_art_cache = state.album_art_cache.write().await;
-        match update_album_art(&mut c, &mut mpdstate, &mut album_art_cache).await {
+        match update_album_art(&mut c, &mut mpdstate, &state.album_art_dir, &mut album_art_cache)
+            .await
+        {
             Ok(Some(pic_hash)) => {
                 if last_pic_hash == Some(pic_hash) {
                     trace!("Same picture, doing nothing");
@@ -145,14 +148,9 @@ pub async fn repeated_update_album_art(
     trace!("Repeated album art update done.");
 }
 
-fn hash_to_album_art_path(hash: u64) -> PathBuf {
-    let pic_dir = match dirs::runtime_dir() {
-        Some(path) => path,
-        None => PathBuf::from("/tmp"),
-    }
-    .join("mpd/album_art/");
+fn hash_to_album_art_path(base_dir: &Path, hash: u64) -> PathBuf {
     let s = base32::encode(base32::Alphabet::Z, &hash.to_le_bytes());
-    pic_dir.join(s)
+    base_dir.join(s)
 }
 
 async fn prepare_album_art_file(path: &PathBuf) -> Result<BufWriter<File>> {

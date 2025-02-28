@@ -1,13 +1,19 @@
 use super::{
     albumart::*,
-    types::{self, MpdState, Mpdris2State, hashmap_to_song_metadata},
+    types::{self, hashmap_to_song_metadata, MpdState, Mpdris2State},
     MpdClient,
 };
 use crate::types::{MpdConnectionConfig, PlayerStateChange, SongMetadata};
 
 use anyhow::Result;
 use log::{debug, error, trace, warn};
-use std::{collections::{VecDeque, HashMap}, mem::discriminant, sync::Arc, time::Duration};
+use std::{
+    collections::{HashMap, VecDeque},
+    mem::discriminant,
+    path::PathBuf,
+    sync::Arc,
+    time::Duration,
+};
 use tokio::{
     spawn,
     sync::broadcast::{channel, Receiver, Sender},
@@ -35,20 +41,31 @@ impl MpdStateServer {
         let connection_config = Arc::new(connection_config);
         // Set up query client
         let mut query_client = MpdClient::new(connection_config.clone()).await?;
+        let album_art_dir = match dirs::runtime_dir() {
+            Some(path) => path,
+            None => PathBuf::from("/tmp"),
+        }
+        .join("mpd/album_art/");
         let mut album_art_cache = VecDeque::new();
         let album_art_updating = Arc::new(RwLock::new(None));
 
         let init_state = query_client.issue_command("status").await?.field_map();
         let init_meta = query_client.issue_command("currentsong").await?.field_map();
         let mut initial_state = MpdState::from(init_state, init_meta)?;
-        if let Err(e) =
-            update_album_art(&mut query_client, &mut initial_state, &mut album_art_cache).await
+        if let Err(e) = update_album_art(
+            &mut query_client,
+            &mut initial_state,
+            &album_art_dir,
+            &mut album_art_cache,
+        )
+        .await
         {
             warn!("Can't retrieve initial album art: {e}");
         }
         let mpdstate = Arc::new(RwLock::new(initial_state));
         let album_art_cache = Arc::new(RwLock::new(album_art_cache));
-        let state = Arc::new(Mpdris2State { album_art_cache, album_art_updating, mpdstate });
+        let state =
+            Arc::new(Mpdris2State { album_art_dir, album_art_cache, album_art_updating, mpdstate });
 
         // Regularly ping to maintain connection
         let query_client = Arc::new(Mutex::new(query_client));
@@ -148,6 +165,14 @@ impl MpdStateServer {
         tx.send(Tracklist)?;
         Ok(())
     }
+
+    pub async fn cleanup(&self) -> Result<()> {
+        if self.state.album_art_dir.is_dir() {
+            debug!("Cleaning up album art folder");
+            tokio::fs::remove_dir_all(&self.state.album_art_dir).await?;
+        }
+        Ok(())
+    }
 }
 
 async fn idle(
@@ -194,7 +219,7 @@ async fn update_status(
         if new.song != old.song {
             debug!("Updating cover due to new song id");
             let mut album_art_cache = state.album_art_cache.write().await;
-            update_album_art(c, &mut new, &mut album_art_cache).await?;
+            update_album_art(c, &mut new, &state.album_art_dir, &mut album_art_cache).await?;
         } else if new_metadata.name.is_some() && subsystem == "player" {
             if new.current_song != old.current_song {
                 debug!("Updating cover due to new ICY tag changed");
@@ -205,6 +230,8 @@ async fn update_status(
                     3,
                     tx.clone(),
                 ));
+            } else {
+                new.album_art = old.album_art;
             }
         } else {
             new.album_art = old.album_art;

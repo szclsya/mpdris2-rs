@@ -1,4 +1,4 @@
-use anyhow::{bail, Result, Context};
+use anyhow::{bail, Context, Result};
 use log::warn;
 use std::path::PathBuf;
 use std::{
@@ -55,6 +55,7 @@ impl From<&str> for MpdStateChanged {
 }
 
 pub struct Mpdris2State {
+    pub album_art_dir: PathBuf,
     pub album_art_cache: Arc<RwLock<VecDeque<(u64, u64)>>>,
     pub album_art_updating: Arc<RwLock<Option<CancellationToken>>>,
     pub mpdstate: Arc<RwLock<MpdState>>,
@@ -163,7 +164,9 @@ impl MpdState {
     }
 }
 
-pub fn hashmap_to_song_metadata(src: &mut HashMap<String, Vec<String>>) -> Result<Option<SongMetadata>> {
+pub fn hashmap_to_song_metadata(
+    src: &mut HashMap<String, Vec<String>>,
+) -> Result<Option<SongMetadata>> {
     let uri = if let Some(mut uri) = src.remove("file") {
         uri.remove(0)
     } else {
@@ -176,7 +179,8 @@ pub fn hashmap_to_song_metadata(src: &mut HashMap<String, Vec<String>>) -> Resul
         bail!("No `Id` in currentsong but file is present")
     };
     let duration = if let Some(value) = src.remove("duration") {
-        let duration = value[0].parse::<f32>().context("Failed to parse `duration in currentsong")?;
+        let duration =
+            value[0].parse::<f32>().context("Failed to parse `duration in currentsong")?;
         Some(Duration::from_secs_f32(duration))
     } else {
         None

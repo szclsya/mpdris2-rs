@@ -1,4 +1,8 @@
-use std::{path::PathBuf, hash::{Hash, Hasher}, time::Duration};
+use std::{
+    hash::{Hash, Hasher},
+    path::PathBuf,
+    time::Duration,
+};
 use twox_hash::XxHash3_64;
 
 #[derive(Clone, Debug)]
