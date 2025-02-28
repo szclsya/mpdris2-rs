@@ -37,3 +37,5 @@ dirs = "6"
 # Optimize for size. This isn't a performance sensitive app
 opt-level = "z"
 lto = true
+strip = true
+codegen-units = 1
