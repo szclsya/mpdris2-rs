@@ -7,8 +7,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use tokio::sync::RwLock;
-use tokio_util::sync::CancellationToken;
+use tokio::{sync::RwLock, task::JoinHandle};
 
 use crate::types::SongMetadata;
 
@@ -57,7 +56,7 @@ impl From<&str> for MpdStateChanged {
 pub struct Mpdris2State {
     pub album_art_dir: PathBuf,
     pub album_art_cache: Arc<RwLock<VecDeque<(u64, u64)>>>,
-    pub album_art_updating: Arc<RwLock<Option<CancellationToken>>>,
+    pub album_art_updating: Arc<RwLock<Option<JoinHandle<()>>>>,
     pub mpdstate: Arc<RwLock<MpdState>>,
 }
 

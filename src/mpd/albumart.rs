@@ -21,7 +21,6 @@ use tokio::{
     sync::Mutex,
     time::sleep,
 };
-use tokio_util::sync::CancellationToken;
 use twox_hash::XxHash3_64;
 
 const ALBUM_ART_CACHE_SIZE: usize = 20;
@@ -91,11 +90,8 @@ pub async fn repeated_update_album_art(
 ) {
     // Check current state
     if let Some(token) = state.album_art_updating.read().await.as_ref() {
-        token.cancel();
+        token.abort();
     }
-
-    let cancel = CancellationToken::new();
-    *state.album_art_updating.write().await = Some(cancel.clone());
 
     let retrieve_interval = 1000;
     let mut last_pic_hash = None;
@@ -107,10 +103,7 @@ pub async fn repeated_update_album_art(
         }
         i += 1;
 
-        tokio::select! {
-            () = cancel.cancelled() => { trace!("Repeated album art update cancelled"); break},
-            () = sleep(Duration::from_millis(retrieve_interval)) => (),
-        };
+        sleep(Duration::from_millis(retrieve_interval)).await;
 
         // Try to update album art
         let mut c = query_client.lock().await;

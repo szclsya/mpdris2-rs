@@ -221,6 +221,9 @@ async fn update_status(
     if let Some(new_metadata) = &new.current_song {
         if new.song != old.song {
             debug!("Updating cover due to new song id");
+            if let Some(handle) = state.album_art_updating.read().await.as_ref() {
+                handle.abort()
+            }
             let mut album_art_cache = state.album_art_cache.write().await;
             update_album_art(c, &mut new, &state.album_art_dir, &mut album_art_cache).await?;
         } else if new_metadata.name.is_some() && subsystem == "player" {
