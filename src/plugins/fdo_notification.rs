@@ -1,6 +1,6 @@
 #![allow(clippy::too_many_arguments)]
 use crate::mpd::{
-    types::{MpdPlaybackState, MpdState},
+    types::{MpdPlaybackState, MpdState, MpdLoopState},
     MpdStateServer,
 };
 /// Sending MPD activities as notifications
@@ -182,6 +182,8 @@ impl<'a> FdoNotificationRelay<'a> {
         let playback_status = state.playback_state.to_string();
         let body = generate_body(&state);
         let album_art = state.album_art.clone().map(|p| format!("file://{}", p.display()));
+        let can_next = state.next_song.is_some() || state.loop_state == MpdLoopState::Playlist;
+
         // Update last notification
         last_notification.summary.clone_from(&playback_status);
         last_notification.body.clone_from(&body);
@@ -219,7 +221,7 @@ impl<'a> FdoNotificationRelay<'a> {
                 DEFAULT_MPD_ICON_PATH,
                 &playback_status,
                 &body,
-                generate_actions(&state.playback_state),
+                generate_actions(&state.playback_state, can_next),
                 &hints,
                 self.notification_timeout.as_millis() as i32,
             )
@@ -236,11 +238,11 @@ pub async fn start(
     connection: &Connection,
     mpdclient: Arc<Mutex<MpdStateServer>>,
     notification_interval: f32,
-) -> Result<JoinHandle<()>> {
+) -> Result<Vec<JoinHandle<()>>> {
     let interval = Duration::from_secs_f32(notification_interval);
     let notification_relay = Arc::new(FdoNotificationRelay::new(connection, mpdclient, interval).await?);
     let nr2 = notification_relay.clone();
-    let task = spawn(async move {
+    let t1 = spawn(async move {
         loop {
             if let Err(e) = notification_relay.send_notification_on_event().await {
                 error!("NotificationRelay dead, restarting: {e}");
@@ -248,16 +250,14 @@ pub async fn start(
             }
         }
     });
-    let task2 = spawn(async move {
+    let t2 = spawn(async move {
         loop {
-            eprintln!("bruh");
             if let Err(e) = nr2.handle_signals().await {
                 error!("Error handling signal from notification daemon: {e}");
             }
-            eprintln!("bruh out");
         }
     });
-    Ok(task)
+    Ok(vec![t1, t2])
 }
 
 fn generate_body(state: &MpdState) -> String {
@@ -288,16 +288,24 @@ fn generate_body(state: &MpdState) -> String {
     }
 }
 
-fn generate_actions(playback_state: &MpdPlaybackState) -> &[&'static str] {
+fn generate_actions(playback_state: &MpdPlaybackState, can_next: bool) -> &[&'static str] {
     match playback_state {
         MpdPlaybackState::Stopped => {
             &["play", "⏵"]
         },
         MpdPlaybackState::Playing(_) => {
-            &["play-pause", "⏸", "next", "⏭"]
+            if can_next {
+                &["play-pause", "⏸", "next", "⏭"]
+            } else {
+                &["play-pause", "⏸"]
+            }
         },
         MpdPlaybackState::Paused(_) => {
-            &["play-pause", "⏵", "next", "⏭"]
+            if can_next {
+                &["play-pause", "⏵", "next", "⏭"]
+            } else {
+                &["play-pause", "⏵"]
+            }
         },
     }
 }
