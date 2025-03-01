@@ -28,6 +28,8 @@ const MAX_SEGMENT_LEN: usize = 30;
 
 #[proxy(interface = "org.freedesktop.Notifications", assume_defaults = true)]
 trait Notifications {
+    fn get_capabilities(&self) -> zbus::Result<Vec<String>>;
+
     fn notify(
         &self,
         app_name: &str,
@@ -81,6 +83,7 @@ pub struct FdoNotificationRelay<'a> {
     notification_interval: Duration,
     notification_signals: Mutex<SignalStream<'a>>,
     last_notification: Mutex<LastNotification>,
+    send_actions: bool,
     hints: HashMap<&'a str, Value<'a>>,
 }
 
@@ -99,13 +102,16 @@ impl<'a> FdoNotificationRelay<'a> {
         hints.insert("urgency", Value::from(0));
         drop(c);
 
+        // Ask server if they support actions
+        let capabilities = proxy.get_capabilities().await?;
+        let send_actions = capabilities.contains(&"actions".to_string());
         debug!("FdoNotification min interval set to {:?}", notification_interval);
-
         let res = FdoNotificationRelay {
             proxy,
             mpd_event_rx: Mutex::new(mpd_event_rx),
             state,
             client,
+            send_actions,
             notification_timeout: Duration::from_secs(DEFUALT_NOTIFICATION_DURATION),
             notification_signals: Mutex::new(notification_signals),
             last_notification: Mutex::new(LastNotification::new()),
@@ -213,6 +219,11 @@ impl<'a> FdoNotificationRelay<'a> {
         } else {
             hints.insert("image-path", Value::from(DEFAULT_MPD_ICON_PATH));
         }
+        let actions = if self.send_actions {
+            generate_actions(&state.playback_state, can_next)
+        } else {
+            &[]
+        };
         let notification_id = self
             .proxy
             .notify(
@@ -221,7 +232,7 @@ impl<'a> FdoNotificationRelay<'a> {
                 DEFAULT_MPD_ICON_PATH,
                 &playback_status,
                 &body,
-                generate_actions(&state.playback_state, can_next),
+                actions,
                 &hints,
                 self.notification_timeout.as_millis() as i32,
             )
