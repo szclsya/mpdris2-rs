@@ -20,12 +20,12 @@ impl TracklistInterface {
 }
 
 #[interface(name = "org.mpris.MediaPlayer2.TrackList")]
-impl<'a> TracklistInterface {
+impl TracklistInterface {
     #[zbus()]
     async fn get_track_metadata(
         &self,
         tracks: Vec<ObjectPath<'_>>,
-    ) -> zbus::fdo::Result<Vec<HashMap<String, Value<'a>>>> {
+    ) -> zbus::fdo::Result<Vec<HashMap<String, Value<'_>>>> {
         let ids: Vec<Value<'_>> = tracks.into_iter().map(Value::new).collect();
 
         let mut res = Vec::new();
