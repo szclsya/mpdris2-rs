@@ -210,12 +210,8 @@ impl PlayerInterface {
 
     #[zbus(property)]
     async fn set_volume(&self, volume: f64) {
-        let mut volume = (volume * 100.0).floor();
-        if volume < 0.0 {
-            volume = 0.0;
-        }
-        let volume = volume as u64;
-        let cmd = format!("volume {volume}");
+        let volume = (volume * 100.0).clamp(0.0, 100.0).round();
+        let cmd = format!("setvol {volume}");
         self.mpdclient.lock().await.issue_command(&cmd).await.ok();
     }
 
