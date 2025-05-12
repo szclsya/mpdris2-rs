@@ -11,9 +11,6 @@ pub struct Args {
     /// socket path must be an absolute path
     #[argh(option)]
     pub host: Option<String>,
-    /// port of TCP connection (deprecated, add port in --host)
-    #[argh(option, hidden_help)]
-    pub port: Option<u16>,
     /// disable notification
     #[argh(switch)]
     pub no_notification: bool,
