@@ -208,7 +208,7 @@ async fn update_status(
     tx: &Sender<Vec<PlayerStateChange>>,
     subsystems: &[&str],
 ) -> Result<()> {
-    debug!("update_status");
+    debug!("Query new MPD status for subsystems: {subsystems:?}");
     let new_status = c.issue_command("status").await?;
     let new_metadata = c.issue_command("currentsong").await?.field_map();
     let mut new = MpdState::from(new_status.field_map(), new_metadata)?;
