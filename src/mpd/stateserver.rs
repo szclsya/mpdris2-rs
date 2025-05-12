@@ -112,7 +112,7 @@ impl MpdStateServer {
 
     pub async fn update_status(&mut self) -> Result<()> {
         let mut c = self.query_client.lock().await;
-        update_status(&mut c, self.query_client.clone(), &self.state, &self.mpd_event_tx, "")
+        update_status(&mut c, self.query_client.clone(), &self.state, &self.mpd_event_tx, &[])
             .await?;
         Ok(())
     }
@@ -162,7 +162,7 @@ impl MpdStateServer {
 
         let mut client = self.query_client.lock().await;
         let tx = &self.mpd_event_tx;
-        update_status(&mut client, self.query_client.clone(), &self.state, tx, "player").await?;
+        update_status(&mut client, self.query_client.clone(), &self.state, tx, &["player"]).await?;
 
         let state_changes = vec![Playback, Loop, Shuffle, Volume, Song, NextSong, Tracklist];
         tx.send(state_changes)?;
@@ -188,20 +188,16 @@ async fn idle(
     let res = c.issue_command(IDLE_CMD).await?;
     trace!("Idle interrupted");
 
-    for (name, field) in res.fields {
-        if name == "changed" {
-            debug!("Idle interrupted by {}", field.as_str());
-            match field.as_str() {
-                "player" | "mixer" | "options" => {
-                    update_status(c, query_client.clone(), state, tx, &field).await?;
-                }
-                unknown => {
-                    debug!("Unhandled event from mpd: {unknown}");
-                }
-            }
+    let mut subsystems: Vec<&str> = Vec::new();
+    for field in &res.fields {
+        if field.0 == "changed" {
+            subsystems.push(&field.1);
         }
     }
 
+    if !subsystems.is_empty() {
+        update_status(c, query_client.clone(), state, tx, &subsystems).await?;
+    }
     Ok(())
 }
 
@@ -210,8 +206,9 @@ async fn update_status(
     query_client: Arc<Mutex<MpdClient>>,
     state: &Arc<types::Mpdris2State>,
     tx: &Sender<Vec<PlayerStateChange>>,
-    subsystem: &str,
+    subsystems: &[&str],
 ) -> Result<()> {
+    debug!("update_status");
     let new_status = c.issue_command("status").await?;
     let new_metadata = c.issue_command("currentsong").await?.field_map();
     let mut new = MpdState::from(new_status.field_map(), new_metadata)?;
@@ -222,11 +219,11 @@ async fn update_status(
         if new.song != old.song {
             debug!("Updating cover due to new song id");
             if let Some(handle) = state.album_art_updating.read().await.as_ref() {
-                handle.abort()
+                handle.abort();
             }
             let mut album_art_cache = state.album_art_cache.write().await;
             update_album_art(c, &mut new, &state.album_art_dir, &mut album_art_cache).await?;
-        } else if new_metadata.name.is_some() && subsystem == "player" {
+        } else if new_metadata.name.is_some() && subsystems.contains(&"player") {
             if new.current_song != old.current_song {
                 debug!("Updating cover due to new ICY tag changed");
                 delayed_update = true;
