@@ -128,14 +128,14 @@ impl MpdClient {
     /// Issue command to MPD server and wait for response.
     /// Returns when response has been received and parsed.
     pub async fn issue_command(&mut self, cmd: &str) -> Result<MpdResponse> {
-        trace!("Issuing command to MPD: {}", cmd);
+        trace!("--> {cmd}");
         let mut real_cmd = cmd.to_owned();
         real_cmd.push('\n');
 
         self.connection.write_all(real_cmd.as_bytes()).await?;
 
         let resp = self.read_response().await?;
-        trace!("Command {} returned", cmd);
+        trace!("<-- {cmd}");
         Ok(resp)
     }
 

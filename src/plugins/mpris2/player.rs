@@ -105,7 +105,7 @@ impl PlayerInterface {
         let t = Duration::from_micros(ms.unsigned_abs());
         let cmd = format!("seekcur {symbol}{}", t.as_secs());
         if let Err(e) = self.mpdclient.lock().await.issue_command(&cmd).await {
-            error!("org.mpris.MediaPlayer2.Player.Seek failed: {}", e);
+            error!("org.mpris.MediaPlayer2.Player.Seek failed: {e}");
         } else {
             PlayerInterface::seeked(&ctxt, ms).await.ok();
         }
@@ -127,12 +127,12 @@ impl PlayerInterface {
             let pos = Duration::from_micros(position as u64);
             let cmd = format!("seekcur {}", pos.as_secs());
             if let Err(e) = self.mpdclient.lock().await.issue_command(&cmd).await {
-                error!("org.mpris.MediaPlayer2.Player.SetPosition failed: {}", e);
+                error!("org.mpris.MediaPlayer2.Player.SetPosition failed: {e}");
             } else {
                 PlayerInterface::seeked(&ctxt, position).await.ok();
             }
         } else {
-            debug!("Wrong song object id: {}", track_id);
+            debug!("Wrong song object id: {track_id}");
         }
     }
 

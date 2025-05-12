@@ -37,12 +37,12 @@ impl RootInterface {
     }
 
     #[zbus(property)]
-    fn identity(&self) -> &str {
+    fn identity(&self) -> &'static str {
         "Music Player Daemon (mpdris2-rs)"
     }
 
     #[zbus(property)]
-    fn desktop_entry(&self) -> &str {
+    fn desktop_entry(&self) -> &'static str {
         "mpdris2-rs"
     }
 

@@ -1,12 +1,12 @@
 #![allow(clippy::too_many_arguments)]
 use crate::mpd::{
-    types::{MpdPlaybackState, MpdState, MpdLoopState},
+    types::{MpdLoopState, MpdPlaybackState, MpdState},
     MpdStateServer,
 };
 /// Sending MPD activities as notifications
 use crate::types::PlayerStateChange;
 
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use futures::StreamExt;
 use log::{debug, error, trace};
 use std::{collections::HashMap, default::Default, sync::Arc};
@@ -105,7 +105,7 @@ impl<'a> FdoNotificationRelay<'a> {
         // Ask server if they support actions
         let capabilities = proxy.get_capabilities().await?;
         let send_actions = capabilities.contains(&"actions".to_string());
-        debug!("FdoNotification min interval set to {:?}", notification_interval);
+        debug!("FdoNotification min interval set to {notification_interval:?}");
         let res = FdoNotificationRelay {
             proxy,
             mpd_event_rx: Mutex::new(mpd_event_rx),
@@ -158,7 +158,7 @@ impl<'a> FdoNotificationRelay<'a> {
         loop {
             trace!("Waiting for MPD state change from NotificationRelay...");
             let events = self.mpd_event_rx.lock().await.recv().await?;
-            trace!("New events from state server: {:?}", events);
+            trace!("New events from state server: {events:?}");
             for event in events {
                 match event {
                     Playback | Song | CurrentSong | AlbumArt => {
@@ -219,11 +219,8 @@ impl<'a> FdoNotificationRelay<'a> {
         } else {
             hints.insert("image-path", Value::from(DEFAULT_MPD_ICON_PATH));
         }
-        let actions = if self.send_actions {
-            generate_actions(&state.playback_state, can_next)
-        } else {
-            &[]
-        };
+        let actions =
+            if self.send_actions { generate_actions(&state.playback_state, can_next) } else { &[] };
         let notification_id = self
             .proxy
             .notify(
@@ -251,7 +248,8 @@ pub async fn start(
     notification_interval: f32,
 ) -> Result<Vec<JoinHandle<()>>> {
     let interval = Duration::from_secs_f32(notification_interval);
-    let notification_relay = Arc::new(FdoNotificationRelay::new(connection, mpdclient, interval).await?);
+    let notification_relay =
+        Arc::new(FdoNotificationRelay::new(connection, mpdclient, interval).await?);
     let nr2 = notification_relay.clone();
     let t1 = spawn(async move {
         loop {
@@ -301,23 +299,21 @@ fn generate_body(state: &MpdState) -> String {
 
 fn generate_actions(playback_state: &MpdPlaybackState, can_next: bool) -> &[&'static str] {
     match playback_state {
-        MpdPlaybackState::Stopped => {
-            &["play", "⏵"]
-        },
+        MpdPlaybackState::Stopped => &["play", "⏵"],
         MpdPlaybackState::Playing(_) => {
             if can_next {
                 &["play-pause", "⏸", "next", "⏭"]
             } else {
                 &["play-pause", "⏸"]
             }
-        },
+        }
         MpdPlaybackState::Paused(_) => {
             if can_next {
                 &["play-pause", "⏵", "next", "⏭"]
             } else {
                 &["play-pause", "⏵"]
             }
-        },
+        }
     }
 }
 

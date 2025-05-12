@@ -74,7 +74,7 @@ impl MpdStateServer {
             loop {
                 let mut client = qc2.lock().await;
                 if let Err(e) = client.issue_command("ping").await {
-                    error!("ping failed: {}", e);
+                    error!("ping failed: {e}");
                     client.reconnect_until_success().await;
                 }
                 drop(client);
