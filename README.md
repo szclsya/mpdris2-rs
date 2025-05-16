@@ -2,6 +2,8 @@
 
 A lightweight implementation of MPD to D-Bus bridge, which exposes MPD player and playlist information onto [MPRIS2](https://specifications.freedesktop.org/mpris-spec/latest/index.html) interface so other programs can use this generic interface to retrieve MPD's playback state.
 
+Distinctively, mpdris2-rs uses MPD protocol's native `readpicture/albumart` methods to fetch album arts. This means mpdris2-rs won't need any access to your local filesystem (apart from your `$XDG_RUNTIME_DIR` for temporarily storing fetched albumarts) and can provide album arts even with remote MPD servers and Internet radios.
+
 ## Installation
 If you are using Arch Linux, mpdris2-rs is available on [AUR](https://aur.archlinux.org/packages/mpdris2-rs).
 
