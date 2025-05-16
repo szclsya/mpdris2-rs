@@ -52,15 +52,17 @@ impl MpdStateServer {
         let init_state = query_client.issue_command("status").await?.field_map();
         let init_meta = query_client.issue_command("currentsong").await?.field_map();
         let mut initial_state = MpdState::from(init_state, init_meta)?;
-        if let Err(e) = update_album_art(
-            &mut query_client,
-            &mut initial_state,
-            &album_art_dir,
-            &mut album_art_cache,
-        )
-        .await
-        {
-            warn!("Can't retrieve initial album art: {e}");
+        if initial_state.song.is_some() {
+            if let Err(e) = update_album_art(
+                &mut query_client,
+                &mut initial_state,
+                &album_art_dir,
+                &mut album_art_cache,
+            )
+            .await
+            {
+                warn!("Can't retrieve initial album art: {e}");
+            }
         }
         let mpdstate = Arc::new(RwLock::new(initial_state));
         let album_art_cache = Arc::new(RwLock::new(album_art_cache));
