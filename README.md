@@ -15,10 +15,11 @@ If using Linux with systemd, you can use systemd user service to run mpdris2-rs.
 This program reads the D-Bus session bus path from `$DBUS_SESSION_BUS_ADDRESS` and fall back to `$XDG_RUNTIME_DIR/bus` if such variable is not defined. Usually this variable should be set automatically when using desktop environments like KDE and GNOME, but if you are using a window manager or launching DE session by yourself, you might need to start your graphical session with `dbus-launch --exit-with-session $CMD`.
 
 Currently the following command line arguments are supported:
-- `--host $MPD_HOST` hostname + port, or UNIX socket path of MPD server, similar to what `mpc` takes
+- `--host $MPD_HOST` or `-h $MPD_HOST` hostname + port, or UNIX socket path of MPD server, similar to what `mpc` takes
   - if not configured, `MPD_HOST` will be used
   - if `MPD_HOST` is not set either, `localhost:6600` is the default
-  - UNIX socket path has to be absolute, and abstract sockets (socket path that starts with `@`) are not supported
+  - UNIX socket path has to be absolute
+  - Abstract sockets are supported on Linux (socket path that starts with `@`, e.g., `@mpd_socket`)
 - `--no-notification` don't send desktop notification
 - `-v` show debug information
 

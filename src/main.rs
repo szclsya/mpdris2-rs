@@ -141,11 +141,58 @@ fn setup_logger(debug: u8) -> Result<()> {
 }
 
 fn parse_host_string(s: String) -> MpdConnectionConfig {
-    if s.starts_with('/') {
+    if s.starts_with('@') {
+        // Abstract socket - @ prefix will be stripped when connecting
+        MpdConnectionConfig::AbstractSocket(s)
+    } else if s.starts_with('/') {
         // UNIX socket
         let path = PathBuf::from(s);
         MpdConnectionConfig::Socket(path)
     } else {
         MpdConnectionConfig::Tcp(s)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_host_string_tcp() {
+        assert!(matches!(
+            parse_host_string("localhost:6600".to_string()),
+            MpdConnectionConfig::Tcp(s) if s == "localhost:6600"
+        ));
+
+        assert!(matches!(
+            parse_host_string("192.168.1.1:6600".to_string()),
+            MpdConnectionConfig::Tcp(s) if s == "192.168.1.1:6600"
+        ));
+    }
+
+    #[test]
+    fn test_parse_host_string_socket() {
+        assert!(matches!(
+            parse_host_string("/var/run/mpd/socket".to_string()),
+            MpdConnectionConfig::Socket(path) if path == PathBuf::from("/var/run/mpd/socket")
+        ));
+
+        assert!(matches!(
+            parse_host_string("/tmp/mpd.sock".to_string()),
+            MpdConnectionConfig::Socket(path) if path == PathBuf::from("/tmp/mpd.sock")
+        ));
+    }
+
+    #[test]
+    fn test_parse_host_string_abstract_socket() {
+        assert!(matches!(
+            parse_host_string("@mpd_socket".to_string()),
+            MpdConnectionConfig::AbstractSocket(s) if s == "@mpd_socket"
+        ));
+
+        assert!(matches!(
+            parse_host_string("@/tmp/mpd".to_string()),
+            MpdConnectionConfig::AbstractSocket(s) if s == "@/tmp/mpd"
+        ));
     }
 }

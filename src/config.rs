@@ -7,9 +7,10 @@ use argh::FromArgs;
 pub struct Args {
     /// host address of MPD server
     /// default to `MPD_HOST` or `localhost:6600`
-    /// can be a TCP address + port (i.e. localhost:6600) or a socket path (i.e. /var/run/mpd/socket)
-    /// socket path must be an absolute path
-    #[argh(option)]
+    /// can be a TCP address + port (i.e. localhost:6600), a socket path (i.e. /var/run/mpd/socket),
+    /// or an abstract socket (i.e. @mpd_socket)
+    /// socket path must be an absolute path, abstract sockets start with @
+    #[argh(option, short = 'h')]
     pub host: Option<String>,
     /// disable notification
     #[argh(switch)]
