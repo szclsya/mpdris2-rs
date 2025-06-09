@@ -12,10 +12,10 @@ pub struct Args {
     #[argh(option)]
     pub host: Option<String>,
     /// disable notification
-    #[argh(switch)]
+    #[argh(switch, short = 'n')]
     pub no_notification: bool,
     /// minimum interval between notifications
-    #[argh(option, default = "0.1")]
+    #[argh(option, short = 'i', default = "0.1")]
     pub notification_interval: f32,
     /// verbose
     #[argh(switch, short = 'v')]
