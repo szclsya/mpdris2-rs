@@ -50,4 +50,5 @@ impl SongMetadata {
 pub enum MpdConnectionConfig {
     Tcp(String),
     Socket(PathBuf),
+    AbstractSocket(String),
 }

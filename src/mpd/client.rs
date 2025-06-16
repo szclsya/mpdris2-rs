@@ -14,6 +14,7 @@ use tokio::{
 enum MpdConnection {
     Tcp((BufReader<tcp::OwnedReadHalf>, BufWriter<tcp::OwnedWriteHalf>)),
     Socket((BufReader<unix::OwnedReadHalf>, BufWriter<unix::OwnedWriteHalf>)),
+    AbstractSocket((BufReader<unix::OwnedReadHalf>, BufWriter<unix::OwnedWriteHalf>)),
 }
 
 impl MpdConnection {
@@ -36,6 +37,24 @@ impl MpdConnection {
                 let (r, w) = (BufReader::new(r), BufWriter::new(w));
                 MpdConnection::Socket((r, w))
             }
+            MpdConnectionConfig::AbstractSocket(abstract_name) => {
+                #[cfg(target_os = "linux")]
+                {
+                    // Replace @ with null byte for abstract socket
+                    let path = format!("\0{}", &abstract_name[1..]);
+                    let stream = UnixStream::connect(&path).await.context(format!(
+                        "Cannot connect to MPD server with abstract socket: {}",
+                        abstract_name.escape_default()
+                    ))?;
+                    let (r, w) = stream.into_split();
+                    let (r, w) = (BufReader::new(r), BufWriter::new(w));
+                    MpdConnection::AbstractSocket((r, w))
+                }
+                #[cfg(not(target_os = "linux"))]
+                {
+                    bail!("Abstract sockets are only supported on Linux");
+                }
+            }
         };
 
         Ok(res)
@@ -45,6 +64,7 @@ impl MpdConnection {
         match self {
             MpdConnection::Tcp((r, _)) => r.read_line(buf).await,
             MpdConnection::Socket((r, _)) => r.read_line(buf).await,
+            MpdConnection::AbstractSocket((r, _)) => r.read_line(buf).await,
         }
     }
 
@@ -52,6 +72,7 @@ impl MpdConnection {
         match self {
             MpdConnection::Tcp((r, _)) => r.read_exact(buf).await,
             MpdConnection::Socket((r, _)) => r.read_exact(buf).await,
+            MpdConnection::AbstractSocket((r, _)) => r.read_exact(buf).await,
         }
     }
 
@@ -63,6 +84,10 @@ impl MpdConnection {
                 w.flush().await?;
             }
             MpdConnection::Socket((_, w)) => {
+                w.write_all(src).await?;
+                w.flush().await?;
+            }
+            MpdConnection::AbstractSocket((_, w)) => {
                 w.write_all(src).await?;
                 w.flush().await?;
             }
