@@ -52,7 +52,7 @@ pub async fn update_album_art(
     // Not in cache, fetch it
     let mut new_pic_hash = None;
     for cmd in ["readpicture", "albumart"] {
-        match mpd_binary_to_file(c, "readpicture", uri, &path).await {
+        match mpd_binary_to_file(c, cmd, uri, &path).await {
             Ok(Some(pic_hash)) => {
                 new_pic_hash = Some(pic_hash);
                 break;
