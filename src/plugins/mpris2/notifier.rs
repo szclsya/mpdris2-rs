@@ -46,6 +46,9 @@ pub async fn notify_loop(
                         player_iface.playback_status_changed(player_ctxt).await?;
                         player_iface.can_go_next_changed(player_ctxt).await?;
                     }
+                    Seek(elapsed) => {
+                        PlayerInterface::seeked(player_ctxt, elapsed.as_micros() as i64).await?;
+                    }
                     Tracklist => {
                         use super::tracklist::{extract_ids_from_metadata, get_current_playlist};
                         if let Ok(tracklist) = get_current_playlist(client.clone()).await {

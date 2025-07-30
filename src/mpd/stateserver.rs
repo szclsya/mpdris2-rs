@@ -249,17 +249,25 @@ async fn update_status(
     // Compare && send state changes
     let new = state.mpdstate.read().await;
     let mut changed = Vec::new();
-    if discriminant(&new.playback_state) != discriminant(&old.playback_state) {
-        changed.push(PlayerStateChange::Playback);
+    if subsystems.contains(&"player") {
+        if discriminant(&new.playback_state) != discriminant(&old.playback_state) {
+            changed.push(PlayerStateChange::Playback);
+        } else if new.song_id != old.song_id && !delayed_update {
+            changed.push(PlayerStateChange::Song);
+        } else {
+            // Seeked
+            if let Some(elapsed) = new.playback_state.get_elapsed() {
+                changed.push(PlayerStateChange::Seek(elapsed));
+            } else {
+                warn!("Received seek state change when stopped");
+            }
+        }
     }
     if new.loop_state != old.loop_state {
         changed.push(PlayerStateChange::Loop);
     }
     if new.random != old.random {
         changed.push(PlayerStateChange::Shuffle);
-    }
-    if new.song_id != old.song_id && !delayed_update {
-        changed.push(PlayerStateChange::Song);
     }
     if new.next_song != old.next_song {
         changed.push(PlayerStateChange::NextSong);
@@ -276,6 +284,7 @@ async fn update_status(
     }
 
     if !changed.is_empty() {
+        debug!("Properties changed: {changed:?}");
         tx.send(changed)?;
     }
     Ok(())

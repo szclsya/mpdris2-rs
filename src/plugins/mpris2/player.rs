@@ -112,7 +112,7 @@ impl PlayerInterface {
     }
 
     #[zbus(signal)]
-    async fn seeked(signal_ctxt: &SignalEmitter<'_>, position: i64) -> zbus::Result<()>;
+    pub async fn seeked(signal_ctxt: &SignalEmitter<'_>, position: i64) -> zbus::Result<()>;
 
     #[zbus()]
     async fn set_position(

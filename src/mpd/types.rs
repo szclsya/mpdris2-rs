@@ -222,6 +222,17 @@ pub enum MpdPlaybackState {
     Stopped,
 }
 
+impl MpdPlaybackState {
+    pub fn get_elapsed(&self) -> Option<Duration> {
+        match self {
+            Self::Playing(x) | Self::Paused(x) => {
+                x.elapsed
+            }
+            _ => None
+        }
+    }
+}
+
 impl Display for MpdPlaybackState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use MpdPlaybackState::*;
