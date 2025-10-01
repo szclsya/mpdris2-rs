@@ -143,13 +143,13 @@ impl PlayerInterface {
     }
 
     #[zbus(property)]
-    async fn playback_status(&self) -> String {
-        self.mpd_state.read().await.playback_state.to_string()
+    async fn playback_status(&self) -> &str {
+        self.mpd_state.read().await.playback_state.as_str()
     }
 
     #[zbus(property)]
-    async fn loop_status(&self) -> String {
-        self.mpd_state.read().await.loop_state.to_string()
+    async fn loop_status(&self) -> &str {
+        self.mpd_state.read().await.loop_state.as_str()
     }
 
     #[zbus(property)]

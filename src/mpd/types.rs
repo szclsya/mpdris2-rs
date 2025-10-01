@@ -3,7 +3,6 @@ use log::warn;
 use std::path::PathBuf;
 use std::{
     collections::{HashMap, VecDeque},
-    fmt::Display,
     sync::Arc,
     time::Duration,
 };
@@ -233,15 +232,14 @@ impl MpdPlaybackState {
     }
 }
 
-impl Display for MpdPlaybackState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl MpdPlaybackState {
+    pub fn as_str(&self) -> &'static str {
         use MpdPlaybackState::*;
-        let s = match self {
+        match self {
             Playing(_) => "Playing",
             Paused(_) => "Paused",
             Stopped => "Stopped",
-        };
-        f.write_str(s)
+        }
     }
 }
 
@@ -281,17 +279,14 @@ impl MpdLoopState {
             _ => None,
         }
     }
-}
 
-impl Display for MpdLoopState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    pub fn as_str(&self) -> &'static str {
         use MpdLoopState::*;
-        let s = match self {
+        match self {
             None => "None",
             Track => "Track",
             Playlist => "Playlist",
-        };
-        f.write_str(s)
+        }
     }
 }
 

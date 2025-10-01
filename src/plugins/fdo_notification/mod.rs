@@ -1,10 +1,14 @@
 #![allow(clippy::too_many_arguments)]
+mod template;
+use template::format_notification;
+
 use crate::mpd::{
     types::{MpdLoopState, MpdPlaybackState, MpdState},
     MpdStateServer,
 };
 /// Sending MPD activities as notifications
 use crate::types::PlayerStateChange;
+use crate::config::Args;
 
 use anyhow::{bail, Result};
 use futures::StreamExt;
@@ -19,12 +23,6 @@ use tokio::{
 };
 use zbus::{proxy, proxy::SignalStream, Connection};
 use zvariant::Value;
-
-const DEFAULT_PLAYER_NAME: &str = "Music Player Daemon";
-const DEFAULT_MPD_ICON_PATH: &str = "/usr/share/icons/hicolor/scalable/apps/mpd.svg";
-const DEFUALT_NOTIFICATION_DURATION: u64 = 5;
-// Maximum length of a segment of metadata one notification, like artist or radio station name
-const MAX_SEGMENT_LEN: usize = 30;
 
 #[proxy(interface = "org.freedesktop.Notifications", assume_defaults = true)]
 trait Notifications {
@@ -77,21 +75,45 @@ pub struct FdoNotificationRelay<'a> {
     state: Arc<RwLock<MpdState>>,
     client: Arc<Mutex<MpdStateServer>>,
 
-    // Settings
-    notification_timeout: Duration,
+    settings: NotificationSetting,
     // Rate-limit settings and internal variables
-    notification_interval: Duration,
     notification_signals: Mutex<SignalStream<'a>>,
     last_notification: Mutex<LastNotification>,
     send_actions: bool,
     hints: HashMap<&'a str, Value<'a>>,
 }
 
+pub struct NotificationSetting {
+    timeout: Duration,
+    interval: Duration,
+    app_name: String,
+    app_icon: String,
+    summary_tmpl: String,
+    body_tmpl: String,
+    paused_summary_tmpl: String,
+    paused_body_tmpl: String,
+}
+
+impl From<Args> for NotificationSetting {
+    fn from(args: Args) -> Self {
+        NotificationSetting {
+            timeout: Duration::from_secs_f32(args.notification_timeout),
+            interval: Duration::from_secs_f32(args.notification_interval),
+            app_name: args.app_name,
+            app_icon: args.app_icon,
+            summary_tmpl: args.notification_summary,
+            paused_summary_tmpl: args.notification_summary_paused,
+            body_tmpl: args.notification_body,
+            paused_body_tmpl: args.notification_body_paused
+        }
+    }
+}
+
 impl<'a> FdoNotificationRelay<'a> {
     pub async fn new(
         connection: &Connection,
         client: Arc<Mutex<MpdStateServer>>,
-        notification_interval: Duration,
+        args: Args
     ) -> Result<FdoNotificationRelay<'a>> {
         let proxy = NotificationsProxy::new(connection).await?;
         let notification_signals = proxy.0.receive_all_signals().await?;
@@ -102,24 +124,24 @@ impl<'a> FdoNotificationRelay<'a> {
         hints.insert("urgency", Value::from(0));
         drop(c);
 
+        let settings = NotificationSetting::from(args);
+
         // Ask server if they support actions
         let capabilities = proxy.get_capabilities().await?;
         let send_actions = capabilities.contains(&"actions".to_string());
-        debug!("FdoNotification min interval set to {notification_interval:?}");
         let res = FdoNotificationRelay {
             proxy,
             mpd_event_rx: Mutex::new(mpd_event_rx),
             state,
             client,
             send_actions,
-            notification_timeout: Duration::from_secs(DEFUALT_NOTIFICATION_DURATION),
+            settings,
             notification_signals: Mutex::new(notification_signals),
             last_notification: Mutex::new(LastNotification::new()),
             hints,
-            notification_interval,
         };
 
-        debug!("Notification timeout: {}", res.notification_timeout.as_secs());
+        debug!("Notification timeout: {}", res.settings.timeout.as_secs());
 
         Ok(res)
     }
@@ -174,7 +196,7 @@ impl<'a> FdoNotificationRelay<'a> {
     async fn send_notification(&self) -> Result<()> {
         let mut last_notification = self.last_notification.lock().await;
         // Check if the last notification has expired, if the notification server hasn't notified us
-        if last_notification.time.elapsed() > self.notification_timeout {
+        if last_notification.time.elapsed() > self.settings.timeout {
             debug!("Last notification has timed out without server notification. Resetting internal register.");
             last_notification.id = 0;
         }
@@ -185,17 +207,28 @@ impl<'a> FdoNotificationRelay<'a> {
         );
 
         let state = self.state.read().await;
-        let playback_status = state.playback_state.to_string();
-        let body = generate_body(&state);
+        //let playback_status = state.playback_state.to_string();
+        let (summary, body) = match state.playback_state {
+            MpdPlaybackState::Playing(_) => {
+                let summary = format_notification(&state, &self.settings.summary_tmpl);
+                let body = format_notification(&state, &self.settings.body_tmpl);
+                (summary, body)
+            }
+            MpdPlaybackState::Paused(_) | MpdPlaybackState::Stopped => {
+                let summary = format_notification(&state, &self.settings.paused_summary_tmpl);
+                let body = format_notification(&state, &self.settings.paused_body_tmpl);
+                (summary, body)
+            }
+        };
         let album_art = state.album_art.clone().map(|p| format!("file://{}", p.display()));
         let can_next = state.next_song.is_some() || state.loop_state == MpdLoopState::Playlist;
 
         // Update last notification
-        last_notification.summary.clone_from(&playback_status);
+        last_notification.summary.clone_from(&summary);
         last_notification.body.clone_from(&body);
         last_notification.album_art.clone_from(&album_art);
 
-        if playback_status != last_notification.summary
+        if summary != last_notification.summary
             && body == last_notification.body
             && album_art == last_notification.album_art
         {
@@ -208,7 +241,7 @@ impl<'a> FdoNotificationRelay<'a> {
         // org.freedesktop.Notifications.Error.ExcessNotificationGeneration
         // This is placed in the end so that even if we hit rate-limit,
         // last_notification is still correct
-        if last_notification.time.elapsed() < self.notification_interval {
+        if last_notification.time.elapsed() < self.settings.interval {
             debug!("Not sending notification due to rate-limit.");
             return Ok(());
         }
@@ -217,21 +250,21 @@ impl<'a> FdoNotificationRelay<'a> {
         if let Some(album_art) = &album_art {
             hints.insert("image-path", Value::from(album_art));
         } else {
-            hints.insert("image-path", Value::from(DEFAULT_MPD_ICON_PATH));
+            hints.insert("image-path", Value::from(&self.settings.app_icon));
         }
         let actions =
             if self.send_actions { generate_actions(&state.playback_state, can_next) } else { &[] };
         let notification_id = self
             .proxy
             .notify(
-                DEFAULT_PLAYER_NAME,
+                &self.settings.app_name,
                 last_notification.id,
-                DEFAULT_MPD_ICON_PATH,
-                &playback_status,
+                &self.settings.app_icon,
+                &summary,
                 &body,
                 actions,
                 &hints,
-                self.notification_timeout.as_millis() as i32,
+                self.settings.timeout.as_millis() as i32,
             )
             .await?;
 
@@ -245,11 +278,10 @@ impl<'a> FdoNotificationRelay<'a> {
 pub async fn start(
     connection: &Connection,
     mpdclient: Arc<Mutex<MpdStateServer>>,
-    notification_interval: f32,
+    args: Args,
 ) -> Result<Vec<JoinHandle<()>>> {
-    let interval = Duration::from_secs_f32(notification_interval);
     let notification_relay =
-        Arc::new(FdoNotificationRelay::new(connection, mpdclient, interval).await?);
+        Arc::new(FdoNotificationRelay::new(connection, mpdclient, args).await?);
     let nr2 = notification_relay.clone();
     let t1 = spawn(async move {
         loop {
@@ -267,34 +299,6 @@ pub async fn start(
         }
     });
     Ok(vec![t1, t2])
-}
-
-fn generate_body(state: &MpdState) -> String {
-    if state.playback_state == MpdPlaybackState::Stopped {
-        "Playback stopped".to_string()
-    } else if let Some(metadata) = &state.current_song {
-        if metadata.title.is_none() && metadata.artist.is_none() {
-            metadata.uri.to_owned()
-        } else {
-            let title = metadata.title.as_deref().unwrap_or("Unknown Song");
-            let mut res = format!("<b>{}</b>", escape_notification_str(title));
-            if let Some(artist) = &metadata.artist {
-                let artist = trim_display_str(artist, MAX_SEGMENT_LEN);
-                res.push_str(&format!("\n{}", escape_notification_str(&artist)));
-            }
-            if let Some(album) = &metadata.album {
-                let album = trim_display_str(album, MAX_SEGMENT_LEN);
-                res.push_str(&format!("\n{}", escape_notification_str(&album)));
-            }
-            if let Some(name) = &metadata.name {
-                let name = trim_display_str(name, MAX_SEGMENT_LEN);
-                res.push_str(&format!("\n{}", escape_notification_str(&name)));
-            }
-            res
-        }
-    } else {
-        todo!()
-    }
 }
 
 fn generate_actions(playback_state: &MpdPlaybackState, can_next: bool) -> &[&'static str] {
@@ -315,20 +319,4 @@ fn generate_actions(playback_state: &MpdPlaybackState, can_next: bool) -> &[&'st
             }
         }
     }
-}
-
-fn trim_display_str(s: &str, max_len: usize) -> String {
-    // Unicode might use multiple bytes for one character
-    // Since we want string len from a human standpoint, use this instead
-    let len = s.chars().count();
-
-    if len > max_len {
-        format!("{s:.width$}...", width = max_len - 3)
-    } else {
-        s.to_owned()
-    }
-}
-
-fn escape_notification_str(s: &str) -> String {
-    s.replace(&['<', '>', '/', '\"', '&'][..], "")
 }

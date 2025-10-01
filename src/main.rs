@@ -48,7 +48,7 @@ async fn try_main() -> Result<()> {
     setup_logger(level)?;
 
     // Configure how to connect to MPD
-    let connection_config = match args.host {
+    let connection_config = match &args.host {
         Some(s) => {
             info!("Connecting to specified MPD server: {s}");
             parse_host_string(s)
@@ -56,7 +56,7 @@ async fn try_main() -> Result<()> {
         None => {
             if let Ok(s) = std::env::var("MPD_HOST") {
                 info!("Connecting to MPD_HOST: {s}");
-                parse_host_string(s)
+                parse_host_string(&s)
             } else {
                 info!("Connecting to default MPD server: {DEFAULT_MPD_HOST}");
                 MpdConnectionConfig::Tcp(DEFAULT_MPD_HOST.to_owned())
@@ -91,7 +91,7 @@ async fn try_main() -> Result<()> {
         let task = plugins::fdo_notification::start(
             &connection,
             mpd_state_server.clone(),
-            args.notification_interval,
+            args,
         )
         .await?;
         Some(task)
@@ -140,16 +140,16 @@ fn setup_logger(debug: u8) -> Result<()> {
     Ok(())
 }
 
-fn parse_host_string(s: String) -> MpdConnectionConfig {
+fn parse_host_string(s: &str) -> MpdConnectionConfig {
     if s.starts_with('@') {
         // Abstract socket - @ prefix will be stripped when connecting
-        MpdConnectionConfig::AbstractSocket(s)
+        MpdConnectionConfig::AbstractSocket(s.to_owned())
     } else if s.starts_with('/') {
         // UNIX socket
         let path = PathBuf::from(s);
         MpdConnectionConfig::Socket(path)
     } else {
-        MpdConnectionConfig::Tcp(s)
+        MpdConnectionConfig::Tcp(s.to_owned())
     }
 }
 
