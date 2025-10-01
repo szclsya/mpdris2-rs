@@ -27,6 +27,9 @@ pub struct Args {
     /// notification's app icon
     #[argh(option, default = "default_app_icon()")]
     pub app_icon: String,
+    /// notification urgency level (0 = low, 1 = normal, 2 = high)
+    #[argh(option, short = 'u', default = "0")]
+    pub notification_urgency: u8,
     /// notification summary (title) template
     #[argh(option, default = "default_summary_template()")]
     pub notification_summary: String,

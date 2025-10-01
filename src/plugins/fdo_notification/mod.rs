@@ -86,6 +86,7 @@ pub struct FdoNotificationRelay<'a> {
 pub struct NotificationSetting {
     timeout: Duration,
     interval: Duration,
+    urgency: u8,
     app_name: String,
     app_icon: String,
     summary_tmpl: String,
@@ -99,6 +100,7 @@ impl From<Args> for NotificationSetting {
         NotificationSetting {
             timeout: Duration::from_secs_f32(args.notification_timeout),
             interval: Duration::from_secs_f32(args.notification_interval),
+            urgency: args.notification_urgency,
             app_name: args.app_name,
             app_icon: args.app_icon,
             summary_tmpl: args.notification_summary,
@@ -120,11 +122,15 @@ impl<'a> FdoNotificationRelay<'a> {
         let c = client.lock().await;
         let mpd_event_rx = c.get_mpd_event_rx();
         let state = c.get_status();
-        let mut hints = HashMap::new();
-        hints.insert("urgency", Value::from(0));
         drop(c);
 
-        let settings = NotificationSetting::from(args);
+        let mut settings = NotificationSetting::from(args);
+        if settings.urgency > 2 {
+            error!("Bad configuration: urgency level not 0, 1 or 2. Fallback to 0");
+            settings.urgency = 0;
+        }
+        let mut hints = HashMap::new();
+        hints.insert("urgency", Value::from(settings.urgency));
 
         // Ask server if they support actions
         let capabilities = proxy.get_capabilities().await?;
