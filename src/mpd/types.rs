@@ -224,10 +224,8 @@ pub enum MpdPlaybackState {
 impl MpdPlaybackState {
     pub fn get_elapsed(&self) -> Option<Duration> {
         match self {
-            Self::Playing(x) | Self::Paused(x) => {
-                x.elapsed
-            }
-            _ => None
+            Self::Playing(x) | Self::Paused(x) => x.elapsed,
+            _ => None,
         }
     }
 }

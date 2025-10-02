@@ -88,12 +88,8 @@ async fn try_main() -> Result<()> {
     // Set up notification relay, if requested
     let _notification_task = if !args.no_notification {
         info!("Notification enabled, starting notification sender...");
-        let task = plugins::fdo_notification::start(
-            &connection,
-            mpd_state_server.clone(),
-            args,
-        )
-        .await?;
+        let task =
+            plugins::fdo_notification::start(&connection, mpd_state_server.clone(), args).await?;
         Some(task)
     } else {
         info!("Notification disabled.");

@@ -34,13 +34,13 @@ pub struct Args {
     #[argh(option, default = "default_summary_template()")]
     pub notification_summary: String,
     /// notification summary (title) template when paused
-     #[argh(option, default = "default_paused_summary_template()")]
+    #[argh(option, default = "default_paused_summary_template()")]
     pub notification_summary_paused: String,
     /// notification body template
     #[argh(option, default = "default_body_template()")]
     pub notification_body: String,
     /// notification body template when paused
-     #[argh(option, default = "default_paused_body_template()")]
+    #[argh(option, default = "default_paused_body_template()")]
     pub notification_body_paused: String,
     /// verbose logging
     #[argh(switch, short = 'v')]

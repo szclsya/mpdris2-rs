@@ -2,13 +2,13 @@
 mod template;
 use template::format_notification;
 
+use crate::config::Args;
 use crate::mpd::{
     types::{MpdLoopState, MpdPlaybackState, MpdState},
     MpdStateServer,
 };
 /// Sending MPD activities as notifications
 use crate::types::PlayerStateChange;
-use crate::config::Args;
 
 use anyhow::{bail, Result};
 use futures::StreamExt;
@@ -106,7 +106,7 @@ impl From<Args> for NotificationSetting {
             summary_tmpl: args.notification_summary,
             paused_summary_tmpl: args.notification_summary_paused,
             body_tmpl: args.notification_body,
-            paused_body_tmpl: args.notification_body_paused
+            paused_body_tmpl: args.notification_body_paused,
         }
     }
 }
@@ -115,7 +115,7 @@ impl<'a> FdoNotificationRelay<'a> {
     pub async fn new(
         connection: &Connection,
         client: Arc<Mutex<MpdStateServer>>,
-        args: Args
+        args: Args,
     ) -> Result<FdoNotificationRelay<'a>> {
         let proxy = NotificationsProxy::new(connection).await?;
         let notification_signals = proxy.0.receive_all_signals().await?;

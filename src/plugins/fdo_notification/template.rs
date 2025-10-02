@@ -1,12 +1,29 @@
 use crate::mpd::types::MpdState;
 
+use std::time::Duration;
+
 pub fn format_notification(state: &MpdState, tmpl: &str) -> String {
     // Un-escape new lines. They are allowed in notification body
     let mut res = tmpl.replace("\\n", "\n");
     // States that will always be there
     res = res.replace("%state%", state.playback_state.as_str());
     res = res.replace("%loop%", state.loop_state.as_str());
-    res = res.replace("%random%", &state.random.to_string());
+    // %elapsed%
+    // Normalized to secs
+    res = res.replace(
+        "%elapsed%",
+        &state
+            .playback_state
+            .get_elapsed()
+            .map(|d| humantime::format_duration(Duration::from_secs(d.as_secs())).to_string())
+            .unwrap_or_default(),
+    );
+    if state.random {
+        res = res.replace("%random%", "Random");
+    } else {
+        res = res.replace("%random%", "");
+    }
+
     // song metadata
     if let Some(song) = &state.current_song {
         // %uri%
@@ -14,10 +31,18 @@ pub fn format_notification(state: &MpdState, tmpl: &str) -> String {
         // %id%
         res = res.replace("%id%", &song.id.to_string());
         // %duration%
-        res = res.replace("%duration%", &song.duration.map(|d| humantime::format_duration(d).to_string()).unwrap_or_default());
+        // Normalized to secs
+        res = res.replace(
+            "%duration%",
+            &song
+                .duration
+                .map(|d| humantime::format_duration(Duration::from_secs(d.as_secs())).to_string())
+                .unwrap_or_default(),
+        );
         // %title%
         // Use either title (file) or name (ICY stream)
-        res = res.replace("%title%", song.title.as_deref().or(song.name.as_deref()).unwrap_or_default());
+        res = res
+            .replace("%title%", song.title.as_deref().or(song.name.as_deref()).unwrap_or_default());
         // %album%
         res = res.replace("%album%", song.album.as_deref().unwrap_or_default());
         // %album_artist%
