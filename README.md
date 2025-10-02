@@ -22,6 +22,21 @@ Currently the following command line arguments are supported:
   - Abstract sockets are supported on Linux (socket path that starts with `@`, e.g., `@mpd_socket`)
 - `--no-notification` don't send desktop notification
 - `-v` show debug information
+- `-t` notification timeout (default 5 secs)
+- `-i` minimal interval between notifications, used to prevent throttling on desktops like KDE
+- `--app-name` app name shown on notifications
+- `--app-icon` default icon when no song cover art is available for display
+- `--notification-summary`, `--notification-summary-paused`, `--notification-body`, `--notification-body-paused`
+  - templating notification summary and body. available arguments are:
+  - `%state%` Playback state
+  - `%loop%` Loop setting
+  - `%elapsed%` Current song elapsed time
+  - `%random%` Print "Random" when random is on, none otherwise
+  - `%uri%` Internal song URI
+  - `%id%` Song position from the playlist
+  - `%duration%` Current song length
+  - `%title%` Song/Internet radio current title
+  - `%album` `%album_artist%` `%artist%` `%composer%` `%disc%` `%track%` `%comment` Self explanatory
 
 ## Implementation Status
 - [x] Root Interface
