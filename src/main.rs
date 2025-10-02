@@ -156,12 +156,12 @@ mod tests {
     #[test]
     fn test_parse_host_string_tcp() {
         assert!(matches!(
-            parse_host_string("localhost:6600".to_string()),
+            parse_host_string("localhost:6600"),
             MpdConnectionConfig::Tcp(s) if s == "localhost:6600"
         ));
 
         assert!(matches!(
-            parse_host_string("192.168.1.1:6600".to_string()),
+            parse_host_string("192.168.1.1:6600"),
             MpdConnectionConfig::Tcp(s) if s == "192.168.1.1:6600"
         ));
     }
@@ -169,12 +169,12 @@ mod tests {
     #[test]
     fn test_parse_host_string_socket() {
         assert!(matches!(
-            parse_host_string("/var/run/mpd/socket".to_string()),
+            parse_host_string("/var/run/mpd/socket"),
             MpdConnectionConfig::Socket(path) if path == PathBuf::from("/var/run/mpd/socket")
         ));
 
         assert!(matches!(
-            parse_host_string("/tmp/mpd.sock".to_string()),
+            parse_host_string("/tmp/mpd.sock"),
             MpdConnectionConfig::Socket(path) if path == PathBuf::from("/tmp/mpd.sock")
         ));
     }
@@ -182,12 +182,12 @@ mod tests {
     #[test]
     fn test_parse_host_string_abstract_socket() {
         assert!(matches!(
-            parse_host_string("@mpd_socket".to_string()),
+            parse_host_string("@mpd_socket"),
             MpdConnectionConfig::AbstractSocket(s) if s == "@mpd_socket"
         ));
 
         assert!(matches!(
-            parse_host_string("@/tmp/mpd".to_string()),
+            parse_host_string("@/tmp/mpd"),
             MpdConnectionConfig::AbstractSocket(s) if s == "@/tmp/mpd"
         ));
     }
