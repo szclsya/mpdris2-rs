@@ -184,14 +184,14 @@ impl PlayerInterface {
     }
 
     #[zbus(property)]
-    async fn metadata(&self) -> HashMap<String, Value<'_>> {
+    async fn metadata(&self) -> HashMap<&'static str, Value<'_>> {
         let state = self.mpd_state.read().await;
         let mut res = HashMap::with_capacity(10);
         if let Some(metadata) = &state.current_song {
             to_mpris_metadata(metadata, &mut res);
             if let Some(art) = &state.album_art {
                 res.insert(
-                    "mpris:artUrl".to_owned(),
+                    "mpris:artUrl",
                     Value::new(format!("file://{}", art.display())),
                 );
             }

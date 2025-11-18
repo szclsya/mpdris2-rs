@@ -17,10 +17,10 @@ pub fn object_path_to_id(path: &ObjectPath) -> Option<u64> {
     None
 }
 
-pub fn to_mpris_metadata(i: &SongMetadata, buf: &mut HashMap<String, Value<'_>>) {
-    let mut optional_insert = |tag: &str, src: &Option<String>| {
+pub fn to_mpris_metadata(i: &SongMetadata, buf: &mut HashMap<&str, Value<'_>>) {
+    let mut optional_insert = |tag: &'static str, src: &Option<String>| {
         if let Some(value) = src {
-            buf.insert(tag.to_owned(), Value::new(value.to_owned()));
+            buf.insert(tag, Value::new(value.to_owned()));
         }
     };
     optional_insert("xesam:title", &i.title);
@@ -28,9 +28,9 @@ pub fn to_mpris_metadata(i: &SongMetadata, buf: &mut HashMap<String, Value<'_>>)
     optional_insert("xesam:discNumber", &i.disc);
     optional_insert("xesam:trackNumber", &i.track);
 
-    let mut optional_insert_array = |tag: &str, src: &Option<String>| {
+    let mut optional_insert_array = |tag: &'static str, src: &Option<String>| {
         if let Some(value) = src {
-            buf.insert(tag.to_owned(), Value::new(vec![value.to_owned()]));
+            buf.insert(tag, Value::new(vec![value.to_owned()]));
         }
     };
     optional_insert_array("xesam:composer", &i.composer);
@@ -39,15 +39,15 @@ pub fn to_mpris_metadata(i: &SongMetadata, buf: &mut HashMap<String, Value<'_>>)
     optional_insert_array("xesam:genre", &i.genre);
 
     // Special types
-    buf.insert("mpris:trackid".to_owned(), Value::new(id_to_object_path(i.id)));
-    buf.insert("xesam:url".to_owned(), Value::new(i.uri.clone()));
+    buf.insert("mpris:trackid", Value::new(id_to_object_path(i.id)));
+    buf.insert("xesam:url", Value::new(i.uri.clone()));
     if let Some(value) = i.duration {
-        buf.insert("mpris:length".to_owned(), Value::new(value.as_micros() as u64));
+        buf.insert("mpris:length", Value::new(value.as_micros() as u64));
     }
     // Use filename as title if no title is declared
     if i.title.is_none() {
         buf.insert(
-            "xesam:title".to_owned(),
+            "xesam:title",
             Value::new(find_filename_from_relpath(&i.uri).to_owned()),
         );
     }

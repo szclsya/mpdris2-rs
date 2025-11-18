@@ -25,7 +25,7 @@ impl TracklistInterface {
     async fn get_track_metadata(
         &self,
         tracks: Vec<ObjectPath<'_>>,
-    ) -> zbus::fdo::Result<Vec<HashMap<String, Value<'_>>>> {
+    ) -> zbus::fdo::Result<Vec<HashMap<&'static str, Value<'_>>>> {
         let ids: Vec<Value<'_>> = tracks.into_iter().map(Value::new).collect();
 
         let mut res = Vec::new();
@@ -109,7 +109,7 @@ impl TracklistInterface {
     async fn track_metadata_changed(
         ctxt: &SignalEmitter<'_>,
         track: ObjectPath<'_>,
-        metadata: HashMap<String, Value<'_>>,
+        metadata: HashMap<&'static str, Value<'_>>,
     ) -> zbus::Result<()>;
 
     #[zbus(property)]
@@ -142,7 +142,7 @@ impl TracklistInterface {
 
 pub async fn get_current_playlist<'a>(
     client: Arc<Mutex<MpdStateServer>>,
-) -> zbus::fdo::Result<Vec<HashMap<std::string::String, zvariant::Value<'a>>>> {
+) -> zbus::fdo::Result<Vec<HashMap<&'static str, zvariant::Value<'a>>>> {
     let metadatas = client.lock().await.get_playlist().await.map_err(to_fdo_err)?;
     let mut res = Vec::with_capacity(metadatas.len());
     for metadata in metadatas {
@@ -155,7 +155,7 @@ pub async fn get_current_playlist<'a>(
 }
 
 pub fn extract_ids_from_metadata<'a>(
-    i: &HashMap<String, Value<'_>>,
+    i: &HashMap<&'static str, Value<'_>>,
 ) -> zbus::fdo::Result<ObjectPath<'a>> {
     let path = i
         .get("mpris::trackid")
