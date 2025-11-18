@@ -41,12 +41,13 @@ pub async fn notify_loop(
                     Volume => {
                         player_iface.volume_changed(player_ctxt).await?;
                     }
-                    Song | CurrentSong | AlbumArt => {
+                    Song | CurrentSong | NextSong | AlbumArt => {
                         player_iface.metadata_changed(player_ctxt).await?;
                         player_iface.playback_status_changed(player_ctxt).await?;
                         player_iface.can_go_next_changed(player_ctxt).await?;
                     }
                     Seek(elapsed) => {
+                        player_iface.playback_status_changed(player_ctxt).await?;
                         PlayerInterface::seeked(player_ctxt, elapsed.as_micros() as i64).await?;
                     }
                     Tracklist => {
@@ -77,7 +78,6 @@ pub async fn notify_loop(
                             .ok();
                         }
                     }
-                    NextSong => (),
                 }
             }
         }
