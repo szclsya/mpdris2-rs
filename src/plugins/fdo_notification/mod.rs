@@ -53,6 +53,7 @@ struct LastNotification {
     body: String,
     album_art: Option<String>,
     time: Instant,
+    initial: bool,
 }
 
 impl LastNotification {
@@ -65,6 +66,7 @@ impl LastNotification {
             body: String::new(),
             album_art: None,
             time,
+            initial: true,
         }
     }
 }
@@ -212,8 +214,8 @@ impl<'a> FdoNotificationRelay<'a> {
             last_notification.time.elapsed()
         );
 
+
         let state = self.state.read().await;
-        //let playback_status = state.playback_state.to_string();
         let (summary, body) = match state.playback_state {
             MpdPlaybackState::Playing(_) => {
                 let summary = format_notification(&state, &self.settings.summary_tmpl);
@@ -221,6 +223,12 @@ impl<'a> FdoNotificationRelay<'a> {
                 (summary, body)
             }
             MpdPlaybackState::Paused(_) | MpdPlaybackState::Stopped => {
+                if last_notification.initial {
+                    debug!("Not sending notification since daemon is launched when MPD is not playing");
+                    last_notification.initial = false;
+                    last_notification.time = Instant::now();
+                    return Ok(());
+                }
                 let summary = format_notification(&state, &self.settings.paused_summary_tmpl);
                 let body = format_notification(&state, &self.settings.paused_body_tmpl);
                 (summary, body)
