@@ -91,6 +91,7 @@ pub struct NotificationSetting {
     urgency: u8,
     app_name: String,
     app_icon: String,
+    max_seg_len: usize,
     summary_tmpl: String,
     body_tmpl: String,
     paused_summary_tmpl: String,
@@ -105,6 +106,7 @@ impl From<Args> for NotificationSetting {
             urgency: args.notification_urgency,
             app_name: args.app_name,
             app_icon: args.app_icon,
+            max_seg_len: args.notification_max_segment_len,
             summary_tmpl: args.notification_summary,
             paused_summary_tmpl: args.notification_summary_paused,
             body_tmpl: args.notification_body,
@@ -218,8 +220,8 @@ impl<'a> FdoNotificationRelay<'a> {
         let state = self.state.read().await;
         let (summary, body) = match state.playback_state {
             MpdPlaybackState::Playing(_) => {
-                let summary = format_notification(&state, &self.settings.summary_tmpl);
-                let body = format_notification(&state, &self.settings.body_tmpl);
+                let summary = format_notification(&state, &self.settings.summary_tmpl, self.settings.max_seg_len);
+                let body = format_notification(&state, &self.settings.body_tmpl, self.settings.max_seg_len);
                 (summary, body)
             }
             MpdPlaybackState::Paused(_) | MpdPlaybackState::Stopped => {
@@ -229,8 +231,8 @@ impl<'a> FdoNotificationRelay<'a> {
                     last_notification.time = Instant::now();
                     return Ok(());
                 }
-                let summary = format_notification(&state, &self.settings.paused_summary_tmpl);
-                let body = format_notification(&state, &self.settings.paused_body_tmpl);
+                let summary = format_notification(&state, &self.settings.paused_summary_tmpl, self.settings.max_seg_len);
+                let body = format_notification(&state, &self.settings.paused_body_tmpl, self.settings.max_seg_len);
                 (summary, body)
             }
         };

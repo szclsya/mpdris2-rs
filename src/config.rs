@@ -30,6 +30,9 @@ pub struct Args {
     /// notification urgency level (0 = low, 1 = normal, 2 = high)
     #[argh(option, short = 'u', default = "0")]
     pub notification_urgency: u8,
+    /// maximum segment length when filling notification template
+    #[argh(option, default = "28")]
+    pub notification_max_segment_len: usize,
     /// notification summary (title) template
     #[argh(option, default = "default_summary_template()")]
     pub notification_summary: String,

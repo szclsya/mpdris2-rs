@@ -1,15 +1,15 @@
 [package]
 name = "mpdris2-rs"
 version = "1.0.2"
-edition = "2021"
+edition = "2024"
 authors = ["Leo Shen <i@szclsya.me>"]
 license = "GPL-3.0-or-later"
-rust-version = "1.80.1"
+rust-version = "1.85.0"
 
 [dependencies]
 anyhow = "1"
 thiserror = "2"
-tokio = { version = "1", features = ["rt", "sync", "time", "io-util", "macros"]}
+tokio = { version = "1", default-features = false, features = ["rt", "macros"]}
 bytes = "1"
 futures = "0.3"
 futures-util = "0.3"
