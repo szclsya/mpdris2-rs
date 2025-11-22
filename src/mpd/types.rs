@@ -1,4 +1,5 @@
 use anyhow::{bail, Context, Result};
+use bytes::Bytes;
 use log::warn;
 use std::path::PathBuf;
 use std::{
@@ -14,7 +15,7 @@ use crate::types::SongMetadata;
 #[derive(Debug)]
 pub struct MpdResponse {
     pub fields: Vec<(String, String)>,
-    pub binary: Option<Vec<u8>>,
+    pub binary: Option<Bytes>,
 }
 
 impl MpdResponse {

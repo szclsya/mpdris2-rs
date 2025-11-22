@@ -10,6 +10,7 @@ use tokio::{
     net::{tcp, unix, TcpStream, UnixStream},
     time::sleep,
 };
+use bytes::{Bytes, BytesMut};
 
 enum MpdConnection {
     Tcp((BufReader<tcp::OwnedReadHalf>, BufWriter<tcp::OwnedWriteHalf>)),
@@ -103,7 +104,7 @@ impl MpdClient {
         let mut hello = String::new();
         res.connection.read_line(&mut hello).await?;
         // Increase binary chunk size
-        res.issue_command("binarylimit 524288").await?;
+        res.issue_command("binarylimit 131072").await?;
 
         Ok(res)
     }
@@ -159,7 +160,7 @@ impl MpdClient {
 
     async fn read_response(&mut self) -> Result<MpdResponse> {
         let mut fields: Vec<(String, String)> = Vec::new();
-        let mut binary: Option<Vec<u8>> = None;
+        let mut binary: Option<Bytes> = None;
 
         let mut buf = String::new();
         loop {
@@ -180,9 +181,9 @@ impl MpdClient {
             if name == "binary" {
                 // We are receiving a binary chunk
                 let len: u64 = value.parse()?;
-                let mut res = vec![0u8; len as usize];
-                self.connection.read_exact(res.as_mut_slice()).await?;
-                binary = Some(res);
+                let mut res = BytesMut::zeroed(len as usize);
+                self.connection.read_exact(res.as_mut()).await?;
+                binary = Some(res.into());
                 // Read newline
                 let mut newline = [0];
                 self.connection.read_exact(&mut newline).await?;
