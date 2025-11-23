@@ -2,7 +2,7 @@ use crate::mpd::types::MpdState;
 
 use std::{borrow::Cow, time::Duration};
 
-const SEGMENT_MAX_LEN: usize = 28;
+const FALLBACK_MESSAGE: &str = "Empty Playlist";
 
 pub fn format_notification(state: &MpdState, tmpl: &str, max_seg_len: usize) -> String {
     // Un-escape new lines. They are allowed in notification body
@@ -61,11 +61,28 @@ pub fn format_notification(state: &MpdState, tmpl: &str, max_seg_len: usize) -> 
         res = res.replace("%track%", &str_clamp(song.track.as_deref().unwrap_or_default(), max_seg_len));
         // %comment%
         res = res.replace("%comment%", &str_clamp(song.comment.as_deref().unwrap_or_default(), max_seg_len));
+    } else {
+        // null replaces
+        res = res.replace("%uri%", "");
+        res = res.replace("%id%", "");
+        res = res.replace("%duration%", "");
+        res = res.replace("%title%", "");
+        res = res.replace("%album%", "");
+        res = res.replace("%album_artist%", "");
+        res = res.replace("%artist%", "");
+        res = res.replace("%composer%", "");
+        res = res.replace("%genre%", "");
+        res = res.replace("%disc%", "");
+        res = res.replace("%track%", "");
+        res = res.replace("%comment%", "");
     }
 
-    // Finishing touch: replace all multiple occurrences of \n with a single one
-    res = res.replace("\n\n", "\n");
-    res = res.replace("\n\n\n", "\n");
+    res = res.replace("%fallback%", FALLBACK_MESSAGE);
+
+    res = res.replace("<b></b>", "");
+    res = res.replace("<i></i>", "");
+    res = res.trim_start_matches("\n").to_string();
+
     res
 }
 

@@ -70,7 +70,7 @@ fn default_paused_summary_template() -> String {
 }
 
 fn default_body_template() -> String {
-    String::from("<b>%title%</b>\n%artist%\n%album%")
+    String::from("<b>%title%</b>\n%artist%\n%album%\n%fallback%")
 }
 
 fn default_paused_body_template() -> String {
