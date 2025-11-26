@@ -87,10 +87,12 @@ pub fn format_notification(state: &MpdState, tmpl: &str, max_seg_len: usize) -> 
 }
 
 fn str_clamp(s: &str, max_len: usize) -> Cow<'_, str> {
-    if s.len() < max_len {
+    let chars = s.chars();
+    let len = chars.clone().count();
+    if len < max_len {
         s.into()
     } else {
-        let mut res = s[..max_len-3].to_string();
+        let mut res: String = chars.take(max_len-3).collect();
         res.push_str("...");
         res.into()
     }
