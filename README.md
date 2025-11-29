@@ -37,6 +37,7 @@ Currently the following command line arguments are supported:
   - `%duration%` Current song length
   - `%title%` Song/Internet radio current title
   - `%album` `%album_artist%` `%artist%` `%composer%` `%disc%` `%track%` `%comment` Self explanatory
+  - `%empty%` Print "Empty Playlist" when no song is playing and playlist is empty
 
 ## Implementation Status
 - [x] Root Interface
