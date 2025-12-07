@@ -30,6 +30,7 @@ pub async fn notify_loop(
                 match s {
                     Playback => {
                         player_iface.playback_status_changed(player_ctxt).await?;
+                        player_iface.metadata_changed(player_ctxt).await?;
                     }
                     Loop => {
                         player_iface.loop_status_changed(player_ctxt).await?;

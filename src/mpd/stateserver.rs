@@ -254,14 +254,10 @@ async fn update_status(
             changed.push(PlayerStateChange::Playback);
         } else if new.song_id != old.song_id && !delayed_update {
             changed.push(PlayerStateChange::Song);
-        } else {
-            // Seeked
-            if let Some(elapsed) = new.playback_state.get_elapsed() {
-                changed.push(PlayerStateChange::Seek(elapsed));
-            } else {
-                warn!("Received seek state change when stopped");
-            }
         }
+    }
+    if let Some(elapsed) = new.playback_state.get_elapsed() {
+        changed.push(PlayerStateChange::Seek(elapsed));
     }
     if new.loop_state != old.loop_state {
         changed.push(PlayerStateChange::Loop);
