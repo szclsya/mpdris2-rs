@@ -256,8 +256,10 @@ async fn update_status(
             changed.push(PlayerStateChange::Song);
         }
     }
-    if let Some(elapsed) = new.playback_state.get_elapsed() {
-        changed.push(PlayerStateChange::Seek(elapsed));
+    if new.playback_state.get_elapsed() != old.playback_state.get_elapsed() {
+        if let Some(elapsed) = new.playback_state.get_elapsed() {
+            changed.push(PlayerStateChange::Seek(elapsed));
+        }
     }
     if new.loop_state != old.loop_state {
         changed.push(PlayerStateChange::Loop);
