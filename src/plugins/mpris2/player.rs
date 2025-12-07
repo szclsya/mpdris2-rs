@@ -187,13 +187,23 @@ impl PlayerInterface {
     async fn metadata(&self) -> HashMap<&'static str, Value<'_>> {
         let state = self.mpd_state.read().await;
         let mut res = HashMap::with_capacity(10);
-        if let Some(metadata) = &state.current_song {
-            to_mpris_metadata(metadata, &mut res);
+        if let Some(metadata) = state.current_song.as_ref() {
+            to_mpris_metadata(&metadata, &mut res);
             if let Some(art) = &state.album_art {
                 res.insert(
                     "mpris:artUrl",
                     Value::new(format!("file://{}", art.display())),
                 );
+            }
+        } else if state.playback_state == MpdPlaybackState::Stopped && state.playlistlength > 0 {
+            if let Ok(Some(metadata)) = self.mpdclient.lock().await.get_track(0).await {
+                to_mpris_metadata(&metadata, &mut res);
+                if let Some(art) = &state.album_art {
+                    res.insert(
+                        "mpris:artUrl",
+                        Value::new(format!("file://{}", art.display())),
+                    );
+                }
             }
         }
         res
