@@ -46,21 +46,37 @@ pub fn format_notification(state: &MpdState, tmpl: &str, max_seg_len: usize) -> 
         let title = song.title.as_deref().or(song.name.as_deref()).unwrap_or(&song.uri);
         res = res.replace("%title%", &str_clamp(title, max_seg_len));
         // %album%
-        res = res.replace("%album%", &str_clamp(song.album.as_deref().unwrap_or_default(), max_seg_len));
+        res = res
+            .replace("%album%", &str_clamp(song.album.as_deref().unwrap_or_default(), max_seg_len));
         // %album_artist%
-        res = res.replace("%album_artist%", &str_clamp(song.album_artist.as_deref().unwrap_or_default(), max_seg_len));
+        res = res.replace(
+            "%album_artist%",
+            &str_clamp(song.album_artist.as_deref().unwrap_or_default(), max_seg_len),
+        );
         // %artist%
-        res = res.replace("%artist%", &str_clamp(song.artist.as_deref().unwrap_or_default(), max_seg_len));
+        res = res.replace(
+            "%artist%",
+            &str_clamp(song.artist.as_deref().unwrap_or_default(), max_seg_len),
+        );
         // %composer%
-        res = res.replace("%composer%", &str_clamp(song.composer.as_deref().unwrap_or_default(), max_seg_len));
+        res = res.replace(
+            "%composer%",
+            &str_clamp(song.composer.as_deref().unwrap_or_default(), max_seg_len),
+        );
         // %genre%
-        res = res.replace("%genre%", &str_clamp(song.genre.as_deref().unwrap_or_default(), max_seg_len));
+        res = res
+            .replace("%genre%", &str_clamp(song.genre.as_deref().unwrap_or_default(), max_seg_len));
         // %disc%
-        res = res.replace("%disc%", &str_clamp(song.disc.as_deref().unwrap_or_default(), max_seg_len));
+        res = res
+            .replace("%disc%", &str_clamp(song.disc.as_deref().unwrap_or_default(), max_seg_len));
         // %track%
-        res = res.replace("%track%", &str_clamp(song.track.as_deref().unwrap_or_default(), max_seg_len));
+        res = res
+            .replace("%track%", &str_clamp(song.track.as_deref().unwrap_or_default(), max_seg_len));
         // %comment%
-        res = res.replace("%comment%", &str_clamp(song.comment.as_deref().unwrap_or_default(), max_seg_len));
+        res = res.replace(
+            "%comment%",
+            &str_clamp(song.comment.as_deref().unwrap_or_default(), max_seg_len),
+        );
         res = res.replace("%empty%", "");
     } else {
         // null replaces
@@ -93,7 +109,7 @@ fn str_clamp(s: &str, max_len: usize) -> Cow<'_, str> {
     if len < max_len {
         s.into()
     } else {
-        let mut res: String = chars.take(max_len-3).collect();
+        let mut res: String = chars.take(max_len - 3).collect();
         res.push_str("...");
         res.into()
     }

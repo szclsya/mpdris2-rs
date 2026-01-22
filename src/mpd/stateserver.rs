@@ -1,22 +1,21 @@
 use super::{
-    albumart::*,
-    types::{self, hashmap_to_song_metadata, MpdState, Mpdris2State},
     MpdClient,
+    albumart::*,
+    types::{self, MpdState, Mpdris2State, hashmap_to_song_metadata},
 };
 use crate::types::{MpdConnectionConfig, PlayerStateChange, SongMetadata};
 
 use anyhow::Result;
-use log::{debug, error, trace, warn};
+use log::{debug, error, trace};
 use std::{
     collections::{HashMap, VecDeque},
-    mem::discriminant,
     path::PathBuf,
     sync::Arc,
     time::Duration,
 };
 use tokio::{
     spawn,
-    sync::broadcast::{channel, Receiver, Sender},
+    sync::broadcast::{Receiver, Sender, channel},
     sync::{Mutex, RwLock},
     task,
     time::sleep,
@@ -40,31 +39,16 @@ impl MpdStateServer {
     pub async fn init(connection_config: MpdConnectionConfig) -> Result<Self> {
         let connection_config = Arc::new(connection_config);
         // Set up query client
-        let mut query_client = MpdClient::new(connection_config.clone()).await?;
+        let query_client = MpdClient::new(connection_config.clone()).await?;
         let album_art_dir = match dirs::runtime_dir() {
             Some(path) => path,
             None => PathBuf::from("/tmp"),
         }
         .join("mpd/album_art/");
-        let mut album_art_cache = VecDeque::new();
+        let album_art_cache = VecDeque::new();
         let album_art_updating = Arc::new(RwLock::new(None));
-
-        let init_state = query_client.issue_command("status").await?.field_map();
-        let init_meta = query_client.issue_command("currentsong").await?.field_map();
-        let mut initial_state = MpdState::from(init_state, init_meta)?;
-        if initial_state.song.is_some() {
-            if let Err(e) = update_album_art(
-                &mut query_client,
-                &mut initial_state,
-                &album_art_dir,
-                &mut album_art_cache,
-            )
-            .await
-            {
-                warn!("Can't retrieve initial album art: {e}");
-            }
-        }
-        let mpdstate = Arc::new(RwLock::new(initial_state));
+        let state = MpdState::default();
+        let mpdstate = Arc::new(RwLock::new(state));
         let album_art_cache = Arc::new(RwLock::new(album_art_cache));
         let state =
             Arc::new(Mpdris2State { album_art_dir, album_art_cache, album_art_updating, mpdstate });
@@ -114,8 +98,13 @@ impl MpdStateServer {
 
     pub async fn update_status(&mut self) -> Result<()> {
         let mut c = self.query_client.lock().await;
-        update_status(&mut c, self.query_client.clone(), &self.state, &self.mpd_event_tx, &[])
-            .await?;
+        let new_status = c.issue_command("status").await?.field_map();
+        let _diffs = self.state.mpdstate.write().await.update_status(new_status)?;
+        Ok(())
+    }
+
+    pub async fn full_update_status(&mut self) -> Result<()> {
+        full_update_status(&self.query_client, &self.state, &self.mpd_event_tx, &[]).await?;
         Ok(())
     }
 
@@ -162,11 +151,9 @@ impl MpdStateServer {
     pub async fn ready(&self) -> Result<()> {
         use PlayerStateChange::*;
 
-        let mut client = self.query_client.lock().await;
         let tx = &self.mpd_event_tx;
-        update_status(&mut client, self.query_client.clone(), &self.state, tx, &["player"]).await?;
 
-        let state_changes = vec![Playback, Loop, Shuffle, Volume, Song, NextSong, Tracklist];
+        let state_changes = vec![Song, NextSong, Metadata];
         tx.send(state_changes)?;
         Ok(())
     }
@@ -188,7 +175,6 @@ async fn idle(
 ) -> Result<()> {
     trace!("Entering idle...");
     let res = c.issue_command(IDLE_CMD).await?;
-    trace!("Idle interrupted");
 
     let mut subsystems: Vec<&str> = Vec::new();
     for field in &res.fields {
@@ -198,92 +184,57 @@ async fn idle(
     }
 
     if !subsystems.is_empty() {
-        update_status(c, query_client.clone(), state, tx, &subsystems).await?;
+        trace!("Idle interrupted: {:?}", subsystems);
+        full_update_status(&query_client, state, tx, &subsystems).await?;
     }
     Ok(())
 }
 
-async fn update_status(
-    c: &mut MpdClient,
-    query_client: Arc<Mutex<MpdClient>>,
+async fn full_update_status(
+    query_client: &Arc<Mutex<MpdClient>>,
     state: &Arc<types::Mpdris2State>,
     tx: &Sender<Vec<PlayerStateChange>>,
     subsystems: &[&str],
 ) -> Result<()> {
-    debug!("Query new MPD status for subsystems: {subsystems:?}");
-    let new_status = c.issue_command("status").await?;
-    let new_metadata = c.issue_command("currentsong").await?.field_map();
-    let mut new = MpdState::from(new_status.field_map(), new_metadata)?;
-    let old = state.mpdstate.read().await.clone();
+    let mut c = query_client.lock().await;
+    let new_status = c.issue_command("status").await?.field_map();
+    let new_metadata_map = c.issue_command("currentsong").await?.field_map();
+    drop(c);
 
-    let mut delayed_update = false;
-    if let Some(new_metadata) = &new.current_song {
-        if new.song != old.song {
-            debug!("Updating cover due to new song id");
-            if let Some(handle) = state.album_art_updating.read().await.as_ref() {
-                handle.abort();
-            }
-            let mut album_art_cache = state.album_art_cache.write().await;
-            update_album_art(c, &mut new, &state.album_art_dir, &mut album_art_cache).await?;
-        } else if new_metadata.name.is_some() && subsystems.contains(&"player") {
-            if new.current_song != old.current_song {
-                debug!("Updating cover due to new ICY tag changed");
-                delayed_update = true;
-                tokio::task::spawn(repeated_update_album_art(
-                    query_client,
-                    state.clone(),
-                    3,
-                    tx.clone(),
-                ));
-            } else {
-                new.album_art = old.album_art;
-            }
+    let mut mpdstate = state.mpdstate.write().await;
+    let mut diffs = mpdstate.update_status(new_status)?;
+    let metadata_diff = mpdstate.update_metadata(new_metadata_map)?;
+    let mut icy_stream = false;
+    if let Some(metadata) = &mpdstate.current_song {
+        icy_stream = metadata.name.is_some();
+    }
+    drop(mpdstate);
+
+    // Determine if it's time for a album art update
+    if metadata_diff {
+        diffs.push(PlayerStateChange::Metadata);
+        if icy_stream {
+            debug!("Looks like this is an icecast stream");
+            repeated_update_album_art(query_client.clone(), state.clone(), 3, tx.clone()).await;
         } else {
-            new.album_art = old.album_art;
+            update_album_art(query_client.clone(), state.clone()).await?;
         }
     }
 
-    // Write changes before broadcasting, so that receivers will have the latest state
-    *state.mpdstate.write().await = new;
-
-    // Compare && send state changes
-    let new = state.mpdstate.read().await;
-    let mut changed = Vec::new();
-    if subsystems.contains(&"player") {
-        if discriminant(&new.playback_state) != discriminant(&old.playback_state) {
-            changed.push(PlayerStateChange::Playback);
-        } else if new.song_id != old.song_id && !delayed_update {
-            changed.push(PlayerStateChange::Song);
-        }
-    }
-    if new.playback_state.get_elapsed() != old.playback_state.get_elapsed() {
-        if let Some(elapsed) = new.playback_state.get_elapsed() {
-            changed.push(PlayerStateChange::Seek(elapsed));
-        }
-    }
-    if new.loop_state != old.loop_state {
-        changed.push(PlayerStateChange::Loop);
-    }
-    if new.random != old.random {
-        changed.push(PlayerStateChange::Shuffle);
-    }
-    if new.next_song != old.next_song {
-        changed.push(PlayerStateChange::NextSong);
-    }
-    if new.volume != old.volume {
-        changed.push(PlayerStateChange::Volume);
-    }
-    if new.song == old.song
-        && new.playlistlength == old.playlistlength
-        && new.current_song != old.current_song
-        && !delayed_update
+    if !icy_stream
+        && subsystems.contains(&"player")
+        && !diffs.contains(&PlayerStateChange::Playback)
+        && !diffs.contains(&PlayerStateChange::Song)
+        && let Some(elapsed) = state.mpdstate.read().await.playback_state.get_elapsed()
     {
-        changed.push(PlayerStateChange::CurrentSong);
+        diffs.push(PlayerStateChange::Seek(elapsed));
     }
 
-    if !changed.is_empty() {
-        debug!("Properties changed: {changed:?}");
-        tx.send(changed)?;
+    if !diffs.is_empty() {
+        diffs.dedup();
+        // It's okay if nobody receives it
+        // This allows us to do first update before any plugin become active
+        tx.send(diffs).ok();
     }
     Ok(())
 }

@@ -65,7 +65,7 @@ async fn try_main() -> Result<()> {
     };
 
     let mut first_retry = true;
-    let mpd_state_server = loop {
+    let mut mpd_state_server = loop {
         match mpd::MpdStateServer::init(connection_config.clone()).await {
             Ok(c) => break c,
             Err(e) => {
@@ -80,6 +80,7 @@ async fn try_main() -> Result<()> {
         }
     };
 
+    mpd_state_server.full_update_status().await?;
     let mpd_state_server = Arc::new(Mutex::new(mpd_state_server));
 
     // Always need MPRIS2

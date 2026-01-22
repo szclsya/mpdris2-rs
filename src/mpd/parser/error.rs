@@ -1,8 +1,8 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use nom::{
+    AsChar, Err, IResult, Input,
     bytes::complete::{tag, take_till},
     character::complete::{char, digit1, space1},
-    AsChar, Err, IResult, Input,
 };
 use thiserror::Error;
 

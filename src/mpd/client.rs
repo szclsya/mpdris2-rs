@@ -2,15 +2,15 @@
 use super::{parse_error_line, parse_line, types::MpdResponse};
 use crate::types::MpdConnectionConfig;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
+use bytes::{Bytes, BytesMut};
 use log::{debug, error, info, trace};
 use std::sync::Arc;
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
-    net::{tcp, unix, TcpStream, UnixStream},
+    net::{TcpStream, UnixStream, tcp, unix},
     time::sleep,
 };
-use bytes::{Bytes, BytesMut};
 
 enum MpdConnection {
     Tcp((BufReader<tcp::OwnedReadHalf>, BufWriter<tcp::OwnedWriteHalf>)),

@@ -4,24 +4,28 @@ use template::format_notification;
 
 use crate::config::Args;
 use crate::mpd::{
-    types::{MpdLoopState, MpdPlaybackState, MpdState},
     MpdStateServer,
+    types::{MpdLoopState, MpdPlaybackState, MpdState},
 };
 /// Sending MPD activities as notifications
 use crate::types::PlayerStateChange;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use futures::StreamExt;
 use log::{debug, error, trace};
-use std::{collections::HashMap, default::Default, sync::Arc};
+use std::{
+    collections::HashMap,
+    default::Default,
+    sync::Arc,
+};
 use tokio::{
     spawn,
     sync::broadcast::Receiver,
     sync::{Mutex, RwLock},
     task::JoinHandle,
-    time::{sleep, Duration, Instant},
+    time::{Duration, Instant, sleep},
 };
-use zbus::{proxy, proxy::SignalStream, Connection};
+use zbus::{Connection, proxy, proxy::SignalStream};
 use zvariant::Value;
 
 #[proxy(interface = "org.freedesktop.Notifications", assume_defaults = true)]
@@ -193,7 +197,7 @@ impl<'a> FdoNotificationRelay<'a> {
             trace!("New events from state server: {events:?}");
             for event in events {
                 match event {
-                    Playback | Song | CurrentSong | AlbumArt => {
+                    Playback | Song | Metadata | AlbumArt => {
                         self.send_notification().await?;
                         continue;
                     }
@@ -207,7 +211,7 @@ impl<'a> FdoNotificationRelay<'a> {
         let mut last_notification = self.last_notification.lock().await;
         // Check if the last notification has expired, if the notification server hasn't notified us
         if last_notification.time.elapsed() > self.settings.timeout {
-            debug!("Last notification has timed out without server notification. Resetting internal register.");
+            debug!("Last notification timed out. Resetting internal register.");
             last_notification.id = 0;
         }
 
@@ -216,23 +220,40 @@ impl<'a> FdoNotificationRelay<'a> {
             last_notification.time.elapsed()
         );
 
-
         let state = self.state.read().await;
         let (summary, body) = match state.playback_state {
             MpdPlaybackState::Playing(_) => {
-                let summary = format_notification(&state, &self.settings.summary_tmpl, self.settings.max_seg_len);
-                let body = format_notification(&state, &self.settings.body_tmpl, self.settings.max_seg_len);
+                let summary = format_notification(
+                    &state,
+                    &self.settings.summary_tmpl,
+                    self.settings.max_seg_len,
+                );
+                let body = format_notification(
+                    &state,
+                    &self.settings.body_tmpl,
+                    self.settings.max_seg_len,
+                );
                 (summary, body)
             }
             MpdPlaybackState::Paused(_) | MpdPlaybackState::Stopped => {
                 if last_notification.initial {
-                    debug!("Not sending notification since daemon is launched when MPD is not playing");
+                    debug!(
+                        "Not sending notification since daemon is launched when MPD is not playing"
+                    );
                     last_notification.initial = false;
                     last_notification.time = Instant::now();
                     return Ok(());
                 }
-                let summary = format_notification(&state, &self.settings.paused_summary_tmpl, self.settings.max_seg_len);
-                let body = format_notification(&state, &self.settings.paused_body_tmpl, self.settings.max_seg_len);
+                let summary = format_notification(
+                    &state,
+                    &self.settings.paused_summary_tmpl,
+                    self.settings.max_seg_len,
+                );
+                let body = format_notification(
+                    &state,
+                    &self.settings.paused_body_tmpl,
+                    self.settings.max_seg_len,
+                );
                 (summary, body)
             }
         };

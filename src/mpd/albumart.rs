@@ -1,13 +1,9 @@
-use super::{
-    types::{MpdState, Mpdris2State},
-    MpdClient,
-};
+use super::{MpdClient, types::Mpdris2State};
 use crate::types::PlayerStateChange;
 
-use anyhow::{bail, format_err, Result};
+use anyhow::{Result, format_err};
 use log::{debug, error, trace, warn};
 use std::{
-    collections::VecDeque,
     hash::Hasher,
     path::{Path, PathBuf},
     sync::Arc,
@@ -17,8 +13,8 @@ use tokio::{
     fs,
     fs::File,
     io::{AsyncWriteExt, BufWriter},
-    sync::broadcast::Sender,
     sync::Mutex,
+    sync::broadcast::Sender,
     time::sleep,
 };
 use twox_hash::XxHash3_64;
@@ -26,13 +22,18 @@ use twox_hash::XxHash3_64;
 const ALBUM_ART_CACHE_SIZE: usize = 20;
 
 pub async fn update_album_art(
-    c: &mut MpdClient,
-    state: &mut MpdState,
-    album_art_dir: &Path,
-    album_art_cache: &mut VecDeque<(u64, u64)>,
+    query_client: Arc<Mutex<MpdClient>>,
+    state: Arc<Mpdris2State>,
 ) -> Result<Option<u64>> {
-    let Some(metadata) = &state.current_song else {
-        bail!("No `file` in currentsong!");
+    let mpdstate = state.mpdstate.read().await;
+    let current_song = mpdstate.current_song.clone();
+    drop(mpdstate);
+
+    let album_art_dir = &state.album_art_dir;
+    let mut album_art_cache = state.album_art_cache.write().await;
+
+    let Some(metadata) = current_song else {
+        return Ok(None);
     };
     let uri = &metadata.uri;
 
@@ -40,19 +41,18 @@ pub async fn update_album_art(
     let path = hash_to_album_art_path(album_art_dir, name_hash);
     // Check if we already have this already
     for (name_hash_l, pic_hash_l) in album_art_cache.iter() {
-        if *name_hash_l == name_hash {
-            // Just give them the filename and we'd be good
-            if path.is_file() {
-                state.album_art = Some(path);
-                return Ok(Some(*pic_hash_l));
-            }
+        if *name_hash_l == name_hash && path.is_file() {
+            trace!("Providing album art from cache");
+            state.mpdstate.write().await.album_art = Some(path);
+            return Ok(Some(*pic_hash_l));
         }
     }
 
-    // Not in cache, fetch it
+    trace!("Requested album art not in cache, fetching...");
     let mut new_pic_hash = None;
     for cmd in ["readpicture", "albumart"] {
-        match mpd_binary_to_file(c, cmd, uri, &path).await {
+        let mut c = query_client.lock().await;
+        match mpd_binary_to_file(&mut c, cmd, uri, &path).await {
             Ok(Some(pic_hash)) => {
                 new_pic_hash = Some(pic_hash);
                 break;
@@ -73,7 +73,7 @@ pub async fn update_album_art(
             }
         }
         // Update new album art
-        state.album_art = Some(path);
+        state.mpdstate.write().await.album_art = Some(path);
         Ok(Some(pic_hash))
     } else {
         Ok(None)
@@ -106,12 +106,7 @@ pub async fn repeated_update_album_art(
         sleep(Duration::from_millis(retrieve_interval)).await;
 
         // Try to update album art
-        let mut c = query_client.lock().await;
-        let mut mpdstate = state.mpdstate.write().await;
-        let mut album_art_cache = state.album_art_cache.write().await;
-        match update_album_art(&mut c, &mut mpdstate, &state.album_art_dir, &mut album_art_cache)
-            .await
-        {
+        match update_album_art(query_client.clone(), state.clone()).await {
             Ok(Some(pic_hash)) => {
                 if last_pic_hash == Some(pic_hash) {
                     trace!("Same picture, doing nothing");

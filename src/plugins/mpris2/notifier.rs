@@ -1,10 +1,10 @@
-use super::{PlayerInterface, TracklistInterface, OBJECT_PATH};
+use super::{OBJECT_PATH, PlayerInterface, TracklistInterface};
 use crate::{mpd::MpdStateServer, types::PlayerStateChange};
 
 use anyhow::Result;
 use log::trace;
 use std::sync::Arc;
-use tokio::sync::{broadcast::Receiver, Mutex};
+use tokio::sync::{Mutex, broadcast::Receiver};
 use zbus::Connection;
 use zvariant::ObjectPath;
 
@@ -30,7 +30,6 @@ pub async fn notify_loop(
                 match s {
                     Playback => {
                         player_iface.playback_status_changed(player_ctxt).await?;
-                        player_iface.metadata_changed(player_ctxt).await?;
                     }
                     Loop => {
                         player_iface.loop_status_changed(player_ctxt).await?;
@@ -42,15 +41,16 @@ pub async fn notify_loop(
                     Volume => {
                         player_iface.volume_changed(player_ctxt).await?;
                     }
-                    Song | CurrentSong | NextSong | AlbumArt => {
-                        player_iface.metadata_changed(player_ctxt).await?;
+                    Song | NextSong => {
                         player_iface.playback_status_changed(player_ctxt).await?;
                         player_iface.can_go_next_changed(player_ctxt).await?;
                     }
                     Seek(elapsed) => {
-                        player_iface.metadata_changed(player_ctxt).await?;
-                        player_iface.playback_status_changed(player_ctxt).await?;
                         PlayerInterface::seeked(player_ctxt, elapsed.as_micros() as i64).await?;
+                    }
+                    Metadata | AlbumArt => {
+                        player_iface.playback_status_changed(player_ctxt).await?;
+                        player_iface.metadata_changed(player_ctxt).await?;
                     }
                     Tracklist => {
                         use super::tracklist::{extract_ids_from_metadata, get_current_playlist};

@@ -2,7 +2,7 @@ use super::utils::*;
 /// `TrackList` interface (org.mpris.MediaPlayer2.TrackList) implementation
 use crate::mpd::MpdStateServer;
 
-use anyhow::{format_err, Context};
+use anyhow::{Context, format_err};
 use log::{error, warn};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
@@ -22,7 +22,7 @@ impl TracklistInterface {
 #[interface(name = "org.mpris.MediaPlayer2.TrackList")]
 impl TracklistInterface {
     #[zbus()]
-    async fn get_track_metadata(
+    async fn get_tracks_metadata(
         &self,
         tracks: Vec<ObjectPath<'_>>,
     ) -> zbus::fdo::Result<Vec<HashMap<&'static str, Value<'_>>>> {
@@ -62,7 +62,7 @@ impl TracklistInterface {
         // We don't do that here either
     }
 
-    #[zbus()]
+    #[zbus(name = "GoTo")]
     async fn goto(
         &self,
         #[zbus(signal_context)] ctxt: SignalEmitter<'_>,
@@ -73,7 +73,7 @@ impl TracklistInterface {
         let cmd = format!("playid {id}");
         match self.mpdclient.lock().await.issue_command(&cmd).await {
             Ok(_resp) => {
-                let mut new_metadata = self.get_track_metadata(vec![track.clone()]).await?;
+                let mut new_metadata = self.get_tracks_metadata(vec![track.clone()]).await?;
                 let new_metadata = new_metadata.remove(0);
                 if !new_metadata.is_empty() {
                     TracklistInterface::track_metadata_changed(&ctxt, track, new_metadata).await?;

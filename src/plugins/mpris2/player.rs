@@ -1,6 +1,6 @@
 use super::utils::*;
 /// Player interface (org.mpris.MediaPlayer2.Player) implementation
-use crate::mpd::{types::*, MpdStateServer};
+use crate::mpd::{MpdStateServer, types::*};
 
 use log::{debug, error};
 use std::{collections::HashMap, sync::Arc, time::Duration};
@@ -23,11 +23,10 @@ impl PlayerInterface {
 impl PlayerInterface {
     #[zbus()]
     async fn play(&self, #[zbus(signal_context)] ctxt: SignalEmitter<'_>) {
-        let mut client = self.mpdclient.lock().await;
+        let client = self.mpdclient.lock().await;
         match client.issue_command("play").await {
             Ok(_) => {
                 PlayerInterface::playback_status_changed(self, &ctxt).await.ok();
-                client.update_status().await.ok();
             }
             Err(e) => {
                 error!("org.mpris.MediaPlayer2.Player.Play failed: {e}");
@@ -188,21 +187,15 @@ impl PlayerInterface {
         let state = self.mpd_state.read().await;
         let mut res = HashMap::with_capacity(10);
         if let Some(metadata) = state.current_song.as_ref() {
-            to_mpris_metadata(&metadata, &mut res);
+            to_mpris_metadata(metadata, &mut res);
             if let Some(art) = &state.album_art {
-                res.insert(
-                    "mpris:artUrl",
-                    Value::new(format!("file://{}", art.display())),
-                );
+                res.insert("mpris:artUrl", Value::new(format!("file://{}", art.display())));
             }
         } else if state.playback_state == MpdPlaybackState::Stopped && state.playlistlength > 0 {
             if let Ok(Some(metadata)) = self.mpdclient.lock().await.get_track(0).await {
                 to_mpris_metadata(&metadata, &mut res);
                 if let Some(art) = &state.album_art {
-                    res.insert(
-                        "mpris:artUrl",
-                        Value::new(format!("file://{}", art.display())),
-                    );
+                    res.insert("mpris:artUrl", Value::new(format!("file://{}", art.display())));
                 }
             }
         }
@@ -211,11 +204,7 @@ impl PlayerInterface {
 
     #[zbus(property)]
     async fn volume(&self) -> f64 {
-        if let Some(vol) = self.mpd_state.read().await.volume {
-            vol as f64 / 100.0
-        } else {
-            100.0
-        }
+        if let Some(vol) = self.mpd_state.read().await.volume { vol as f64 / 100.0 } else { 100.0 }
     }
 
     #[zbus(property)]

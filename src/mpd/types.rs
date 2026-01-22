@@ -1,6 +1,7 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use bytes::Bytes;
 use log::warn;
+use std::mem::discriminant;
 use std::path::PathBuf;
 use std::{
     collections::{HashMap, VecDeque},
@@ -9,7 +10,7 @@ use std::{
 };
 use tokio::{sync::RwLock, task::JoinHandle};
 
-use crate::types::SongMetadata;
+use crate::types::{PlayerStateChange, SongMetadata};
 
 // A list of fields + optional binary data
 #[derive(Debug)]
@@ -60,7 +61,7 @@ pub struct Mpdris2State {
     pub mpdstate: Arc<RwLock<MpdState>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 #[allow(dead_code)]
 pub struct MpdState {
     pub playback_state: MpdPlaybackState,
@@ -70,7 +71,8 @@ pub struct MpdState {
     pub playlist_id: Option<u64>,
     pub song: Option<u64>,
     pub song_id: Option<u64>,
-    pub next_song: Option<(u64, u64)>,
+    pub next_song: Option<u64>,
+    pub next_song_id: Option<u64>,
     pub playlistlength: u64,
 
     pub current_song: Option<SongMetadata>,
@@ -78,11 +80,12 @@ pub struct MpdState {
 }
 
 impl MpdState {
-    pub fn from(
+    pub fn update_status(
+        &mut self,
         mut status: HashMap<String, Vec<String>>,
-        mut metadata: HashMap<String, Vec<String>>,
-    ) -> Result<Self> {
+    ) -> Result<Vec<PlayerStateChange>> {
         let mut missing_fields = Vec::new();
+        let mut diffs = Vec::new();
         let mut get_or_complain = |name: &str| match status.get(name) {
             Some(c) => c[0].clone(),
             None => {
@@ -100,18 +103,51 @@ impl MpdState {
             },
             None => None,
         };
-
-        let playlistlength = get_u64("playlistlength");
         let song = get_u64("song");
         let song_id = get_u64("songid");
+        if self.song_id != song_id || self.song != song {
+            diffs.push(PlayerStateChange::Song);
+        }
+        self.song = song;
+        self.song_id = song_id;
+
+        let playlistlength = get_u64("playlistlength").unwrap_or_default();
         let playlist_id = get_u64("playlist");
+        if self.playlistlength != playlistlength || self.playlist_id != playlist_id {
+            diffs.push(PlayerStateChange::Tracklist);
+        }
+        self.playlistlength = playlistlength;
+        self.playlist_id = playlist_id;
+
         let next_song = get_u64("nextsong");
         let next_song_id = get_u64("nextsongid");
+        if self.next_song != next_song || self.next_song_id != next_song_id {
+            diffs.push(PlayerStateChange::NextSong);
+        }
+        self.next_song = next_song;
+        self.next_song_id = next_song_id;
+
         let volume = get_u64("volume");
-        let state = get_or_complain("state");
+        if self.volume != volume {
+            diffs.push(PlayerStateChange::Volume);
+        }
+        self.volume = volume;
+
         let repeat = get_or_complain("repeat");
         let single = get_or_complain("single");
-        let random = get_or_complain("random");
+        let loop_state = MpdLoopState::from_mpd(&repeat, &single)?;
+        if self.loop_state != loop_state {
+            diffs.push(PlayerStateChange::Loop);
+        }
+        self.loop_state = loop_state;
+
+        let random = mpd_num_to_bool(&get_or_complain("random"), "random")?;
+        if self.random != random {
+            diffs.push(PlayerStateChange::Shuffle);
+        }
+        self.random = random;
+
+        let state = get_or_complain("state");
         let playback_state = if state == "play" || state == "pause" {
             let elapsed = status.remove("elapsed");
             let duration = status.remove("duration");
@@ -138,28 +174,22 @@ impl MpdState {
             }
             MpdPlaybackState::Stopped
         };
+        if discriminant(&playback_state) != discriminant(&self.playback_state) {
+            diffs.push(PlayerStateChange::Playback);
+        }
+        self.playback_state = playback_state;
 
-        let next_song = if let (Some(next_song), Some(next_song_id)) = (next_song, next_song_id) {
-            Some((next_song, next_song_id))
-        } else {
-            None
-        };
+        Ok(diffs)
+    }
 
-        let res = MpdState {
-            playback_state,
-            loop_state: MpdLoopState::from_mpd(&repeat, &single)?,
-            random: mpd_num_to_bool(&random, "random")?,
-            volume,
-            playlist_id,
-            song,
-            song_id,
-            next_song,
-            playlistlength: playlistlength.unwrap_or(0),
-            current_song: hashmap_to_song_metadata(&mut metadata)?,
-            album_art: None,
-        };
-
-        Ok(res)
+    pub fn update_metadata(&mut self, mut metadata: HashMap<String, Vec<String>>) -> Result<bool> {
+        let new = hashmap_to_song_metadata(&mut metadata)?;
+        let diff = self.current_song != new;
+        self.current_song = new;
+        if diff {
+            self.album_art = None;
+        }
+        Ok(diff)
     }
 }
 
@@ -215,11 +245,12 @@ pub fn hashmap_to_song_metadata(
     Ok(Some(res))
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Default)]
 pub enum MpdPlaybackState {
+    #[default]
+    Stopped,
     Playing(MpdPlayingState),
     Paused(MpdPlayingState),
-    Stopped,
 }
 
 impl MpdPlaybackState {
@@ -248,8 +279,9 @@ pub struct MpdPlayingState {
     pub duration: Option<Duration>,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Default)]
 pub enum MpdLoopState {
+    #[default]
     None,
     Track,
     Playlist,

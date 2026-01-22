@@ -5,17 +5,15 @@ use std::{
 };
 use twox_hash::XxHash3_64;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum PlayerStateChange {
     Playback,
     Loop,
     Shuffle,
     Volume,
     Song,
+    Metadata,
     NextSong,
-    // If the current song's metadata is changed
-    // Happens when a Internet radios station changes metadata
-    CurrentSong,
     Seek(Duration),
     AlbumArt,
     Tracklist,

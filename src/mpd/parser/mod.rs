@@ -1,10 +1,10 @@
 mod error;
 pub use error::*;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use nom::{
-    bytes::complete::{tag, take_till, take_while},
     AsChar, Err, IResult,
+    bytes::complete::{tag, take_till, take_while},
 };
 
 pub fn parse_line(i: &str) -> Result<(&str, &str)> {

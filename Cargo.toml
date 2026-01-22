@@ -37,6 +37,7 @@ dirs = "6"
 [profile.release]
 # Optimize for size. This isn't a performance sensitive app
 opt-level = "z"
+panic = "abort"
 lto = true
 strip = true
 codegen-units = 1

@@ -46,17 +46,10 @@ pub fn to_mpris_metadata(i: &SongMetadata, buf: &mut HashMap<&str, Value<'_>>) {
     }
     // Use filename as title if no title is declared
     if i.title.is_none() {
-        buf.insert(
-            "xesam:title",
-            Value::new(find_filename_from_relpath(&i.uri).to_owned()),
-        );
+        buf.insert("xesam:title", Value::new(find_filename_from_relpath(&i.uri).to_owned()));
     }
 }
 
 fn find_filename_from_relpath(i: &str) -> &str {
-    if let Some(pos) = i.rfind('/') {
-        &i[pos + 1..]
-    } else {
-        i
-    }
+    if let Some(pos) = i.rfind('/') { &i[pos + 1..] } else { i }
 }
