@@ -21,7 +21,7 @@ use tokio::{
     time::sleep,
 };
 
-const IDLE_CMD: &str = "idle player mixer options";
+const IDLE_CMD: &str = "idle player mixer playlist options";
 const PING_INTERVAL: Duration = Duration::from_secs(55);
 
 pub struct MpdStateServer {
