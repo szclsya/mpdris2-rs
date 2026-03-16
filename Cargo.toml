@@ -14,8 +14,8 @@ bytes = "1"
 futures = "0.3"
 futures-util = "0.3"
 # Commuicating with D-Bus
-zbus = { version = "5", default-features = false, features = ["tokio"] }
-zvariant = "5"
+zbus = { version = "5.9.0", default-features = false, features = ["tokio"] }
+zvariant = "5.9.0"
 # Parsing MPD protocol
 nom = "8"
 # Creating unique album art filenames
@@ -33,6 +33,11 @@ signal-hook-tokio = { version = "0.4", features = ["futures-v0_3"] }
 # Config
 argh = "0.1"
 dirs = "6"
+console-subscriber = { version = "*", optional = true }
+
+[features]
+# Used alongside tokio-console
+tokio-console = ["dep:console-subscriber"]
 
 [profile.release]
 # Optimize for size. This isn't a performance sensitive app

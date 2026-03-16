@@ -21,6 +21,9 @@ const DEFAULT_MPD_HOST: &str = "localhost:6600";
 const XXHASH3_64_SEED: u64 = 979;
 
 fn main() {
+    #[cfg(feature = "tokio-console")]
+    console_subscriber::init();
+
     let rt = match runtime::Builder::new_current_thread().enable_io().enable_time().build() {
         Ok(rt) => rt,
         Err(e) => {
