@@ -13,11 +13,7 @@ use crate::types::PlayerStateChange;
 use anyhow::{Result, bail};
 use futures::StreamExt;
 use log::{debug, error, trace};
-use std::{
-    collections::HashMap,
-    default::Default,
-    sync::Arc,
-};
+use std::{collections::HashMap, default::Default, sync::Arc};
 use tokio::{
     spawn,
     sync::broadcast::Receiver,
@@ -79,7 +75,7 @@ pub struct FdoNotificationRelay<'a> {
     proxy: NotificationsProxy<'a>,
     mpd_event_rx: Mutex<Receiver<Vec<PlayerStateChange>>>,
     state: Arc<RwLock<MpdState>>,
-    client: Arc<Mutex<MpdStateServer>>,
+    client: Arc<MpdStateServer>,
 
     settings: NotificationSetting,
     // Rate-limit settings and internal variables
@@ -122,15 +118,13 @@ impl From<Args> for NotificationSetting {
 impl<'a> FdoNotificationRelay<'a> {
     pub async fn new(
         connection: &Connection,
-        client: Arc<Mutex<MpdStateServer>>,
+        client: Arc<MpdStateServer>,
         args: Args,
     ) -> Result<FdoNotificationRelay<'a>> {
         let proxy = NotificationsProxy::new(connection).await?;
         let notification_signals = proxy.0.receive_all_signals().await?;
-        let c = client.lock().await;
-        let mpd_event_rx = c.get_mpd_event_rx();
-        let state = c.get_status();
-        drop(c);
+        let mpd_event_rx = client.get_mpd_event_rx();
+        let state = client.get_status();
 
         let mut settings = NotificationSetting::from(args);
         if settings.urgency > 2 {
@@ -176,11 +170,10 @@ impl<'a> FdoNotificationRelay<'a> {
             } else if name.as_str() == "ActionInvoked" {
                 // Read the real action
                 let (_id, body): (u32, String) = signal.body().deserialize()?;
-                let c = self.client.lock().await;
                 match body.as_str() {
-                    "play" => c.issue_command("play").await?,
-                    "play-pause" => c.issue_command("pause").await?,
-                    "next" => c.issue_command("next").await?,
+                    "play" => self.client.issue_command("play").await?,
+                    "play-pause" => self.client.issue_command("pause").await?,
+                    "next" => self.client.issue_command("next").await?,
                     _ => bail!("Invalid notification action"),
                 };
             }
@@ -314,7 +307,7 @@ impl<'a> FdoNotificationRelay<'a> {
 
 pub async fn start(
     connection: &Connection,
-    mpdclient: Arc<Mutex<MpdStateServer>>,
+    mpdclient: Arc<MpdStateServer>,
     args: Args,
 ) -> Result<Vec<JoinHandle<()>>> {
     let notification_relay =

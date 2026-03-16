@@ -14,7 +14,7 @@ use log::{debug, error, info};
 use signal_hook::consts::signal::{SIGINT, SIGQUIT, SIGTERM};
 use signal_hook_tokio::Signals;
 use std::{path::PathBuf, sync::Arc, time::Duration};
-use tokio::{runtime, sync::Mutex, time::sleep};
+use tokio::{runtime, time::sleep};
 
 const DEFAULT_MPD_HOST: &str = "localhost:6600";
 // ASCII code of "mpdris2-rs" added together
@@ -65,7 +65,7 @@ async fn try_main() -> Result<()> {
     };
 
     let mut first_retry = true;
-    let mut mpd_state_server = loop {
+    let mpd_state_server = loop {
         match mpd::MpdStateServer::init(connection_config.clone()).await {
             Ok(c) => break c,
             Err(e) => {
@@ -81,7 +81,7 @@ async fn try_main() -> Result<()> {
     };
 
     mpd_state_server.full_update_status().await?;
-    let mpd_state_server = Arc::new(Mutex::new(mpd_state_server));
+    let mpd_state_server = Arc::new(mpd_state_server);
 
     // Always need MPRIS2
     let (connection, _notifier_task) = plugins::mpris2::start(mpd_state_server.clone()).await?;
@@ -98,7 +98,7 @@ async fn try_main() -> Result<()> {
     };
 
     // Broadcast MPD server state change
-    mpd_state_server.lock().await.ready().await?;
+    mpd_state_server.ready().await?;
 
     // Now everything is set-up, wait for an exit signal
     info!("Service started.");
@@ -107,7 +107,7 @@ async fn try_main() -> Result<()> {
     if let Some(_signal) = signals.next().await {
         info!("Exit signal received, closing D-Bus connection");
         handle.close();
-        mpd_state_server.lock().await.cleanup().await?;
+        mpd_state_server.cleanup().await?;
     }
 
     Ok(())

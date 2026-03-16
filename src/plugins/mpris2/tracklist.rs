@@ -5,16 +5,15 @@ use crate::mpd::MpdStateServer;
 use anyhow::{Context, format_err};
 use log::{error, warn};
 use std::{collections::HashMap, sync::Arc};
-use tokio::sync::Mutex;
 use zbus::{interface, object_server::SignalEmitter};
 use zvariant::{ObjectPath, Value};
 
 pub struct TracklistInterface {
-    mpdclient: Arc<Mutex<MpdStateServer>>,
+    mpdclient: Arc<MpdStateServer>,
 }
 
 impl TracklistInterface {
-    pub fn new(mpdclient: Arc<Mutex<MpdStateServer>>) -> Self {
+    pub fn new(mpdclient: Arc<MpdStateServer>) -> Self {
         TracklistInterface { mpdclient }
     }
 }
@@ -39,9 +38,7 @@ impl TracklistInterface {
             } else {
                 return Err(to_fdo_err(format_err!("Invalid song id")));
             };
-            if let Some(metadata) =
-                self.mpdclient.lock().await.get_track(id).await.map_err(to_fdo_err)?
-            {
+            if let Some(metadata) = self.mpdclient.get_track(id).await.map_err(to_fdo_err)? {
                 let mut mpris_metadata = HashMap::new();
                 to_mpris_metadata(&metadata, &mut mpris_metadata);
                 res.push(mpris_metadata);
@@ -71,7 +68,7 @@ impl TracklistInterface {
         let Some(id) = object_path_to_id(&track) else { return Ok(()) };
 
         let cmd = format!("playid {id}");
-        match self.mpdclient.lock().await.issue_command(&cmd).await {
+        match self.mpdclient.issue_command(&cmd).await {
             Ok(_resp) => {
                 let mut new_metadata = self.get_tracks_metadata(vec![track.clone()]).await?;
                 let new_metadata = new_metadata.remove(0);
@@ -114,8 +111,7 @@ impl TracklistInterface {
 
     #[zbus(property)]
     async fn tracks(&self) -> Vec<ObjectPath<'_>> {
-        let client = self.mpdclient.lock().await;
-        let resp = match client.issue_command("playlistinfo").await {
+        let resp = match self.mpdclient.issue_command("playlistinfo").await {
             Ok(resp) => resp,
             Err(e) => {
                 error!("org.mpris.MediaPlayer2.Tracks failed: {e}");
@@ -141,9 +137,9 @@ impl TracklistInterface {
 }
 
 pub async fn get_current_playlist<'a>(
-    client: Arc<Mutex<MpdStateServer>>,
+    client: Arc<MpdStateServer>,
 ) -> zbus::fdo::Result<Vec<HashMap<&'static str, zvariant::Value<'a>>>> {
-    let metadatas = client.lock().await.get_playlist().await.map_err(to_fdo_err)?;
+    let metadatas = client.get_playlist().await.map_err(to_fdo_err)?;
     let mut res = Vec::with_capacity(metadatas.len());
     for metadata in metadatas {
         let mut entry = HashMap::new();

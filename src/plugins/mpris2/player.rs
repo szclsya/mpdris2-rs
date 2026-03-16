@@ -4,18 +4,18 @@ use crate::mpd::{MpdStateServer, types::*};
 
 use log::{debug, error};
 use std::{collections::HashMap, sync::Arc, time::Duration};
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 use zbus::{interface, object_server::SignalEmitter};
 use zvariant::{ObjectPath, Value};
 
 pub struct PlayerInterface {
-    mpdclient: Arc<Mutex<MpdStateServer>>,
+    mpdclient: Arc<MpdStateServer>,
     mpd_state: Arc<RwLock<MpdState>>,
 }
 
 impl PlayerInterface {
-    pub async fn new(mpdclient: Arc<Mutex<MpdStateServer>>) -> Self {
-        PlayerInterface { mpd_state: mpdclient.clone().lock().await.get_status(), mpdclient }
+    pub async fn new(mpdclient: Arc<MpdStateServer>) -> Self {
+        PlayerInterface { mpd_state: mpdclient.clone().get_status(), mpdclient }
     }
 }
 
@@ -23,8 +23,7 @@ impl PlayerInterface {
 impl PlayerInterface {
     #[zbus()]
     async fn play(&self, #[zbus(signal_context)] ctxt: SignalEmitter<'_>) {
-        let client = self.mpdclient.lock().await;
-        match client.issue_command("play").await {
+        match self.mpdclient.issue_command("play").await {
             Ok(_) => {
                 PlayerInterface::playback_status_changed(self, &ctxt).await.ok();
             }
@@ -36,7 +35,7 @@ impl PlayerInterface {
 
     #[zbus()]
     async fn pause(&self, #[zbus(signal_context)] ctxt: SignalEmitter<'_>) {
-        match self.mpdclient.lock().await.issue_command("pause 1").await {
+        match self.mpdclient.issue_command("pause 1").await {
             Ok(_) => {
                 PlayerInterface::playback_status_changed(self, &ctxt).await.ok();
             }
@@ -49,12 +48,11 @@ impl PlayerInterface {
     #[zbus()]
     async fn play_pause(&self, #[zbus(signal_context)] ctxt: SignalEmitter<'_>) {
         // Decide with command to use based on the current state
-        let state = self.mpd_state.read().await;
-        let command = match state.playback_state {
+        let command = match self.mpd_state.read().await.playback_state {
             MpdPlaybackState::Stopped => "play",
             _ => "pause",
         };
-        match self.mpdclient.lock().await.issue_command(command).await {
+        match self.mpdclient.issue_command(command).await {
             Ok(_) => {
                 PlayerInterface::playback_status_changed(self, &ctxt).await.ok();
             }
@@ -66,7 +64,7 @@ impl PlayerInterface {
 
     #[zbus()]
     async fn next(&self) {
-        self.mpdclient.lock().await.issue_command("next").await.ok();
+        self.mpdclient.issue_command("next").await.ok();
     }
 
     #[zbus()]
@@ -81,7 +79,7 @@ impl PlayerInterface {
             }
         }
 
-        match self.mpdclient.lock().await.issue_command(cmd).await {
+        match self.mpdclient.issue_command(cmd).await {
             Ok(_) => {
                 if cmd == "seekcur 0" {
                     PlayerInterface::seeked(&ctxt, 0).await.ok();
@@ -95,7 +93,7 @@ impl PlayerInterface {
 
     #[zbus()]
     async fn stop(&self) {
-        self.mpdclient.lock().await.issue_command("stop").await.ok();
+        self.mpdclient.issue_command("stop").await.ok();
     }
 
     #[zbus()]
@@ -103,7 +101,7 @@ impl PlayerInterface {
         let symbol = if ms > 0 { '+' } else { '-' };
         let t = Duration::from_micros(ms.unsigned_abs());
         let cmd = format!("seekcur {symbol}{}", t.as_secs());
-        if let Err(e) = self.mpdclient.lock().await.issue_command(&cmd).await {
+        if let Err(e) = self.mpdclient.issue_command(&cmd).await {
             error!("org.mpris.MediaPlayer2.Player.Seek failed: {e}");
         } else {
             PlayerInterface::seeked(&ctxt, ms).await.ok();
@@ -120,12 +118,11 @@ impl PlayerInterface {
         track_id: ObjectPath<'_>,
         position: i64,
     ) {
-        let state = self.mpd_state.read().await;
-        let song = state.song_id;
+        let song = self.mpd_state.read().await.song_id;
         if song == object_path_to_id(&track_id) {
             let pos = Duration::from_micros(position as u64);
             let cmd = format!("seekcur {}", pos.as_secs());
-            if let Err(e) = self.mpdclient.lock().await.issue_command(&cmd).await {
+            if let Err(e) = self.mpdclient.issue_command(&cmd).await {
                 error!("org.mpris.MediaPlayer2.Player.SetPosition failed: {e}");
             } else {
                 PlayerInterface::seeked(&ctxt, position).await.ok();
@@ -138,7 +135,7 @@ impl PlayerInterface {
     #[zbus()]
     async fn open_uri(&self, uri: &str) {
         let cmd = format!("add {uri}");
-        self.mpdclient.lock().await.issue_command(&cmd).await.ok();
+        self.mpdclient.issue_command(&cmd).await.ok();
     }
 
     #[zbus(property)]
@@ -159,7 +156,7 @@ impl PlayerInterface {
             MpdLoopState::Playlist => ["repeat 1", "single 0"],
         };
         for cmd in commands {
-            self.mpdclient.lock().await.issue_command(cmd).await.ok();
+            self.mpdclient.issue_command(cmd).await.ok();
         }
     }
 
@@ -179,7 +176,7 @@ impl PlayerInterface {
     #[zbus(property)]
     async fn set_shuffle(&self, shuffle: bool) {
         let cmd = if shuffle { "random 1" } else { "random 0" };
-        self.mpdclient.lock().await.issue_command(cmd).await.ok();
+        self.mpdclient.issue_command(cmd).await.ok();
     }
 
     #[zbus(property)]
@@ -192,7 +189,7 @@ impl PlayerInterface {
                 res.insert("mpris:artUrl", Value::new(format!("file://{}", art.display())));
             }
         } else if state.playback_state == MpdPlaybackState::Stopped && state.playlistlength > 0 {
-            if let Ok(Some(metadata)) = self.mpdclient.lock().await.get_track(0).await {
+            if let Ok(Some(metadata)) = self.mpdclient.get_track(0).await {
                 to_mpris_metadata(&metadata, &mut res);
                 if let Some(art) = &state.album_art {
                     res.insert("mpris:artUrl", Value::new(format!("file://{}", art.display())));
@@ -211,14 +208,14 @@ impl PlayerInterface {
     async fn set_volume(&self, volume: f64) {
         let volume = (volume * 100.0).clamp(0.0, 100.0).round();
         let cmd = format!("setvol {volume}");
-        self.mpdclient.lock().await.issue_command(&cmd).await.ok();
+        self.mpdclient.issue_command(&cmd).await.ok();
     }
 
     #[zbus(property)]
     async fn position(&self) -> i64 {
         use MpdPlaybackState::*;
 
-        self.mpdclient.lock().await.update_status().await.ok();
+        self.mpdclient.update_status().await.ok();
         let elapsed = match &self.mpd_state.read().await.playback_state {
             Playing(s) | Paused(s) => {
                 if let Some(elapsed) = s.elapsed {

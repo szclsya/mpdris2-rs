@@ -4,14 +4,14 @@ use crate::{mpd::MpdStateServer, types::PlayerStateChange};
 use anyhow::Result;
 use log::trace;
 use std::sync::Arc;
-use tokio::sync::{Mutex, broadcast::Receiver};
+use tokio::sync::broadcast::Receiver;
 use zbus::Connection;
 use zvariant::ObjectPath;
 
 pub async fn notify_loop(
     c: &Connection,
     rx: &mut Receiver<Vec<PlayerStateChange>>,
-    client: &Arc<Mutex<MpdStateServer>>,
+    client: &Arc<MpdStateServer>,
 ) -> Result<()> {
     use PlayerStateChange::*;
     let player_iface_ref = c.object_server().interface::<_, PlayerInterface>(OBJECT_PATH).await?;
@@ -64,7 +64,6 @@ pub async fn notify_loop(
                                 ObjectPath::try_from("/org/mpris/MediaPlayer2/TrackList/NoTrack")
                                     .unwrap()
                             } else {
-                                let client = client.lock().await;
                                 let state = client.get_status();
                                 let state = state.read().await;
                                 let current_pos = state.song.unwrap_or(0);

@@ -96,19 +96,18 @@ impl MpdStateServer {
         self.state.mpdstate.clone()
     }
 
-    pub async fn update_status(&mut self) -> Result<()> {
-        let mut c = self.query_client.lock().await;
-        let new_status = c.issue_command("status").await?.field_map();
+    pub async fn update_status(&self) -> Result<()> {
+        let new_status = self.query_client.lock().await.issue_command("status").await?.field_map();
         let _diffs = self.state.mpdstate.write().await.update_status(new_status)?;
         Ok(())
     }
 
-    pub async fn full_update_status(&mut self) -> Result<()> {
+    pub async fn full_update_status(&self) -> Result<()> {
         full_update_status(&self.query_client, &self.state, &self.mpd_event_tx, &[]).await?;
         Ok(())
     }
 
-    pub async fn get_track(&mut self, id: u64) -> Result<Option<SongMetadata>> {
+    pub async fn get_track(&self, id: u64) -> Result<Option<SongMetadata>> {
         let response = self.issue_command(&format!("playlistid {id}")).await?;
         let mut hashmap: HashMap<String, Vec<String>> =
             response.fields.into_iter().map(|d| (d.0, vec![d.1])).collect();
@@ -116,7 +115,7 @@ impl MpdStateServer {
         Ok(metadata)
     }
 
-    pub async fn get_playlist(&mut self) -> Result<Vec<SongMetadata>> {
+    pub async fn get_playlist(&self) -> Result<Vec<SongMetadata>> {
         let mut res = Vec::new();
 
         let response = self.issue_command("playlistinfo").await?;

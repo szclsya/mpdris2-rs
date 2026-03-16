@@ -16,12 +16,10 @@ use tracklist::TracklistInterface;
 use anyhow::{Context, Result};
 use log::error;
 use std::sync::Arc;
-use tokio::{spawn, sync::Mutex, task::JoinHandle};
+use tokio::{spawn, task::JoinHandle};
 use zbus::Connection;
 
-pub async fn start(
-    mpd_state_server: Arc<Mutex<MpdStateServer>>,
-) -> Result<(Connection, JoinHandle<()>)> {
+pub async fn start(mpd_state_server: Arc<MpdStateServer>) -> Result<(Connection, JoinHandle<()>)> {
     let root_interface = RootInterface::default();
     let player_interface = PlayerInterface::new(mpd_state_server.clone()).await;
     let tracklist_interface = TracklistInterface::new(mpd_state_server.clone());
@@ -37,7 +35,7 @@ pub async fn start(
 
     let connection2 = connection.clone();
     let client = mpd_state_server.clone();
-    let mut rx = mpd_state_server.lock().await.get_mpd_event_rx();
+    let mut rx = mpd_state_server.get_mpd_event_rx();
 
     let notifier = spawn(async move {
         loop {
