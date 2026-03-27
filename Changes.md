@@ -1,3 +1,8 @@
+## 1.1.1 - 2026-03-26
+
+- debug: add tokio-console support when enabled
+- mpd: remove global lock on state server
+
 ## 1.1.0 - 2026-03-09
 
 - fdo_notification: add template support
