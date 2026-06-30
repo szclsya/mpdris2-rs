@@ -1,3 +1,8 @@
+## 1.1.2 - 2026-06-30
+
+- chore: bump dependencies
+- misc: support sandboxing in the bundled systemd service file
+
 ## 1.1.1 - 2026-03-26
 
 - debug: add tokio-console support when enabled
