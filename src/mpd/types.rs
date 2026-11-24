@@ -21,9 +21,9 @@ pub struct MpdResponse {
 
 impl MpdResponse {
     pub fn field_map(&self) -> HashMap<String, Vec<String>> {
-        let mut res = HashMap::new();
+        let mut res: HashMap<String, Vec<String>> = HashMap::new();
         for (name, value) in &self.fields {
-            res.entry(name.clone()).or_insert_with(|| vec![value.clone()]).push(value.to_owned());
+            res.entry(name.clone()).or_default().push(value.to_owned());
         }
         res
     }
@@ -291,7 +291,8 @@ impl MpdLoopState {
     pub fn from_mpd(repeat: &str, single: &str) -> Result<Self> {
         use MpdLoopState::*;
         let repeat = mpd_num_to_bool(repeat, "repeat")?;
-        let single = mpd_num_to_bool(single, "single")?;
+        // `oneshot` (MPD >= 0.24, src/SingleMode.cxx) also means single is on.
+        let single = if single == "oneshot" { true } else { mpd_num_to_bool(single, "single")? };
         let res = if repeat && single {
             Track
         } else if repeat && !single {
