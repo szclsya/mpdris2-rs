@@ -142,10 +142,8 @@ fn hash_to_album_art_path(base_dir: &Path, hash: u64) -> PathBuf {
 }
 
 async fn prepare_album_art_file(path: &PathBuf) -> Result<BufWriter<File>> {
-    if let Some(pic_dir) = path.parent() {
-        if !pic_dir.is_dir() {
-            fs::create_dir_all(&pic_dir).await?;
-        }
+    if let Some(pic_dir) = path.parent() && !pic_dir.is_dir() {
+        fs::create_dir_all(&pic_dir).await?;
     }
     if path.is_file() {
         fs::remove_file(&path).await?;

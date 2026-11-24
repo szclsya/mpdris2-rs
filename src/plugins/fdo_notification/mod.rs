@@ -21,7 +21,7 @@ use tokio::{
     task::JoinHandle,
     time::{Duration, Instant, sleep},
 };
-use zbus::{Connection, proxy, proxy::SignalStream, Variant};
+use zbus::{Connection, Variant, proxy, proxy::SignalStream};
 
 #[proxy(interface = "org.freedesktop.Notifications", assume_defaults = true)]
 trait Notifications {

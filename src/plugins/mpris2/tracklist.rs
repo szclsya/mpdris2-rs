@@ -5,7 +5,7 @@ use crate::mpd::MpdStateServer;
 use anyhow::{Context, format_err};
 use log::{error, warn};
 use std::{collections::HashMap, sync::Arc};
-use zbus::{interface, object_server::SignalEmitter, ObjectPath, Variant};
+use zbus::{ObjectPath, Variant, interface, object_server::SignalEmitter};
 
 pub struct TracklistInterface {
     mpdclient: Arc<MpdStateServer>,

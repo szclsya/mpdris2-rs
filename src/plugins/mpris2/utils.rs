@@ -9,10 +9,10 @@ pub fn id_to_object_path<'a>(id: impl std::fmt::Display) -> ObjectPath<'a> {
 }
 
 pub fn object_path_to_id(path: &ObjectPath) -> Option<u64> {
-    if let Some(n) = path.strip_prefix("/org/musicpd/song/") {
-        if let Ok(n) = n.parse() {
-            return Some(n);
-        }
+    if let Some(n) = path.strip_prefix("/org/musicpd/song/")
+        && let Ok(n) = n.parse()
+    {
+        return Some(n);
     }
     None
 }

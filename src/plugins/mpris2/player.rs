@@ -5,7 +5,7 @@ use crate::mpd::{MpdStateServer, types::*};
 use log::{debug, error};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
-use zbus::{interface, object_server::SignalEmitter, ObjectPath, Variant};
+use zbus::{ObjectPath, Variant, interface, object_server::SignalEmitter};
 
 pub struct PlayerInterface {
     mpdclient: Arc<MpdStateServer>,
@@ -70,12 +70,11 @@ impl PlayerInterface {
     async fn previous(&self, #[zbus(signal_emitter)] ctxt: SignalEmitter<'_>) {
         let state = self.mpd_state.read().await;
         let mut cmd = "previous";
-        if let MpdPlaybackState::Playing(state) = &state.playback_state {
-            if let Some(elapsed) = state.elapsed {
-                if elapsed.as_secs_f32() > 3.0 {
-                    cmd = "seekcur 0";
-                }
-            }
+        if let MpdPlaybackState::Playing(state) = &state.playback_state
+            && let Some(elapsed) = state.elapsed
+            && elapsed.as_secs_f32() > 3.0
+        {
+            cmd = "seekcur 0";
         }
 
         match self.mpdclient.issue_command(cmd).await {
@@ -187,12 +186,13 @@ impl PlayerInterface {
             if let Some(art) = &state.album_art {
                 res.insert("mpris:artUrl", Variant::new(format!("file://{}", art.display())));
             }
-        } else if state.playback_state == MpdPlaybackState::Stopped && state.playlistlength > 0 {
-            if let Ok(Some(metadata)) = self.mpdclient.get_track(0).await {
-                to_mpris_metadata(&metadata, &mut res);
-                if let Some(art) = &state.album_art {
-                    res.insert("mpris:artUrl", Variant::new(format!("file://{}", art.display())));
-                }
+        } else if state.playback_state == MpdPlaybackState::Stopped
+            && state.playlistlength > 0
+            && let Ok(Some(metadata)) = self.mpdclient.get_track(0).await
+        {
+            to_mpris_metadata(&metadata, &mut res);
+            if let Some(art) = &state.album_art {
+                res.insert("mpris:artUrl", Variant::new(format!("file://{}", art.display())));
             }
         }
         res
