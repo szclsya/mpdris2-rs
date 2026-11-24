@@ -5,8 +5,7 @@ use anyhow::Result;
 use log::trace;
 use std::sync::Arc;
 use tokio::sync::broadcast::Receiver;
-use zbus::Connection;
-use zvariant::ObjectPath;
+use zbus::{Connection, ObjectPath};
 
 pub async fn notify_loop(
     c: &Connection,

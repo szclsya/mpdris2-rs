@@ -21,8 +21,7 @@ use tokio::{
     task::JoinHandle,
     time::{Duration, Instant, sleep},
 };
-use zbus::{Connection, proxy, proxy::SignalStream};
-use zvariant::Value;
+use zbus::{Connection, proxy, proxy::SignalStream, Variant};
 
 #[proxy(interface = "org.freedesktop.Notifications", assume_defaults = true)]
 trait Notifications {
@@ -36,7 +35,7 @@ trait Notifications {
         summary: &str,
         body: &str,
         actions: &[&str],
-        hints: &HashMap<&str, Value<'_>>,
+        hints: &HashMap<&str, Variant<'_>>,
         expire_timeout: i32,
     ) -> zbus::Result<u32>;
 
@@ -82,7 +81,7 @@ pub struct FdoNotificationRelay<'a> {
     notification_signals: Mutex<SignalStream<'a>>,
     last_notification: Mutex<LastNotification>,
     send_actions: bool,
-    hints: HashMap<&'a str, Value<'a>>,
+    hints: HashMap<&'a str, Variant<'a>>,
 }
 
 pub struct NotificationSetting {
@@ -132,7 +131,7 @@ impl<'a> FdoNotificationRelay<'a> {
             settings.urgency = 0;
         }
         let mut hints = HashMap::new();
-        hints.insert("urgency", Value::from(settings.urgency));
+        hints.insert("urgency", Variant::from(settings.urgency));
 
         // Ask server if they support actions
         let capabilities = proxy.get_capabilities().await?;
@@ -278,9 +277,9 @@ impl<'a> FdoNotificationRelay<'a> {
 
         let mut hints = self.hints.clone();
         if let Some(album_art) = &album_art {
-            hints.insert("image-path", Value::from(album_art));
+            hints.insert("image-path", Variant::from(album_art));
         } else {
-            hints.insert("image-path", Value::from(&self.settings.app_icon));
+            hints.insert("image-path", Variant::from(&self.settings.app_icon));
         }
         let actions =
             if self.send_actions { generate_actions(&state.playback_state, can_next) } else { &[] };

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use zvariant::{ObjectPath, Value};
+use zbus::{ObjectPath, Variant};
 
 use crate::types::SongMetadata;
 
@@ -17,10 +17,10 @@ pub fn object_path_to_id(path: &ObjectPath) -> Option<u64> {
     None
 }
 
-pub fn to_mpris_metadata(i: &SongMetadata, buf: &mut HashMap<&str, Value<'_>>) {
+pub fn to_mpris_metadata(i: &SongMetadata, buf: &mut HashMap<&str, Variant<'_>>) {
     let mut optional_insert = |tag: &'static str, src: &Option<String>| {
         if let Some(value) = src {
-            buf.insert(tag, Value::new(value.to_owned()));
+            buf.insert(tag, Variant::new(value.to_owned()));
         }
     };
     optional_insert("xesam:title", &i.title);
@@ -30,7 +30,7 @@ pub fn to_mpris_metadata(i: &SongMetadata, buf: &mut HashMap<&str, Value<'_>>) {
 
     let mut optional_insert_array = |tag: &'static str, src: &Option<String>| {
         if let Some(value) = src {
-            buf.insert(tag, Value::new(vec![value.to_owned()]));
+            buf.insert(tag, Variant::new(vec![value.to_owned()]));
         }
     };
     optional_insert_array("xesam:composer", &i.composer);
@@ -39,14 +39,14 @@ pub fn to_mpris_metadata(i: &SongMetadata, buf: &mut HashMap<&str, Value<'_>>) {
     optional_insert_array("xesam:genre", &i.genre);
 
     // Special types
-    buf.insert("mpris:trackid", Value::new(id_to_object_path(i.id)));
-    buf.insert("xesam:url", Value::new(i.uri.clone()));
+    buf.insert("mpris:trackid", Variant::new(id_to_object_path(i.id)));
+    buf.insert("xesam:url", Variant::new(i.uri.clone()));
     if let Some(value) = i.duration {
-        buf.insert("mpris:length", Value::new(value.as_micros() as u64));
+        buf.insert("mpris:length", Variant::new(value.as_micros() as u64));
     }
     // Use filename as title if no title is declared
     if i.title.is_none() {
-        buf.insert("xesam:title", Value::new(find_filename_from_relpath(&i.uri).to_owned()));
+        buf.insert("xesam:title", Variant::new(find_filename_from_relpath(&i.uri).to_owned()));
     }
 }
 

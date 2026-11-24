@@ -5,8 +5,7 @@ use crate::mpd::MpdStateServer;
 use anyhow::{Context, format_err};
 use log::{error, warn};
 use std::{collections::HashMap, sync::Arc};
-use zbus::{interface, object_server::SignalEmitter};
-use zvariant::{ObjectPath, Value};
+use zbus::{interface, object_server::SignalEmitter, ObjectPath, Variant};
 
 pub struct TracklistInterface {
     mpdclient: Arc<MpdStateServer>,
@@ -24,12 +23,12 @@ impl TracklistInterface {
     async fn get_tracks_metadata(
         &self,
         tracks: Vec<ObjectPath<'_>>,
-    ) -> zbus::fdo::Result<Vec<HashMap<&'static str, Value<'_>>>> {
-        let ids: Vec<Value<'_>> = tracks.into_iter().map(Value::new).collect();
+    ) -> zbus::fdo::Result<Vec<HashMap<&'static str, Variant<'_>>>> {
+        let ids: Vec<Variant<'_>> = tracks.into_iter().map(Variant::new).collect();
 
         let mut res = Vec::new();
         for id in ids {
-            let Value::ObjectPath(obj_path) = id else {
+            let Variant::ObjectPath(obj_path) = id else {
                 return Err(to_fdo_err(format_err!("Invalid song id")));
             };
             // Extract id
@@ -62,7 +61,7 @@ impl TracklistInterface {
     #[zbus(name = "GoTo")]
     async fn goto(
         &self,
-        #[zbus(signal_context)] ctxt: SignalEmitter<'_>,
+        #[zbus(signal_emitter)] ctxt: SignalEmitter<'_>,
         track: ObjectPath<'_>,
     ) -> zbus::fdo::Result<()> {
         let Some(id) = object_path_to_id(&track) else { return Ok(()) };
@@ -94,7 +93,7 @@ impl TracklistInterface {
     #[zbus(signal)]
     async fn track_added(
         ctxt: &SignalEmitter<'_>,
-        metadata: HashMap<String, Value<'_>>,
+        metadata: HashMap<String, Variant<'_>>,
         after: ObjectPath<'_>,
     ) -> zbus::Result<()>;
 
@@ -106,7 +105,7 @@ impl TracklistInterface {
     async fn track_metadata_changed(
         ctxt: &SignalEmitter<'_>,
         track: ObjectPath<'_>,
-        metadata: HashMap<&'static str, Value<'_>>,
+        metadata: HashMap<&'static str, Variant<'_>>,
     ) -> zbus::Result<()>;
 
     #[zbus(property)]
@@ -138,7 +137,7 @@ impl TracklistInterface {
 
 pub async fn get_current_playlist<'a>(
     client: Arc<MpdStateServer>,
-) -> zbus::fdo::Result<Vec<HashMap<&'static str, zvariant::Value<'a>>>> {
+) -> zbus::fdo::Result<Vec<HashMap<&'static str, Variant<'a>>>> {
     let metadatas = client.get_playlist().await.map_err(to_fdo_err)?;
     let mut res = Vec::with_capacity(metadatas.len());
     for metadata in metadatas {
@@ -151,12 +150,12 @@ pub async fn get_current_playlist<'a>(
 }
 
 pub fn extract_ids_from_metadata<'a>(
-    i: &HashMap<&'static str, Value<'_>>,
+    i: &HashMap<&'static str, Variant<'_>>,
 ) -> zbus::fdo::Result<ObjectPath<'a>> {
     let path = i
         .get("mpris::trackid")
         .ok_or_else(|| zbus::fdo::Error::Failed("mpris::trackid doesn't exist".to_string()))?;
-    if let Value::ObjectPath(p) = path {
+    if let Variant::ObjectPath(p) = path {
         Ok(p.to_owned())
     } else {
         Err(zbus::fdo::Error::Failed("mpris::trackid is not ObjectPath".to_string()))

@@ -5,8 +5,7 @@ use crate::mpd::{MpdStateServer, types::*};
 use log::{debug, error};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
-use zbus::{interface, object_server::SignalEmitter};
-use zvariant::{ObjectPath, Value};
+use zbus::{interface, object_server::SignalEmitter, ObjectPath, Variant};
 
 pub struct PlayerInterface {
     mpdclient: Arc<MpdStateServer>,
@@ -22,7 +21,7 @@ impl PlayerInterface {
 #[interface(name = "org.mpris.MediaPlayer2.Player")]
 impl PlayerInterface {
     #[zbus()]
-    async fn play(&self, #[zbus(signal_context)] ctxt: SignalEmitter<'_>) {
+    async fn play(&self, #[zbus(signal_emitter)] ctxt: SignalEmitter<'_>) {
         match self.mpdclient.issue_command("play").await {
             Ok(_) => {
                 PlayerInterface::playback_status_changed(self, &ctxt).await.ok();
@@ -34,7 +33,7 @@ impl PlayerInterface {
     }
 
     #[zbus()]
-    async fn pause(&self, #[zbus(signal_context)] ctxt: SignalEmitter<'_>) {
+    async fn pause(&self, #[zbus(signal_emitter)] ctxt: SignalEmitter<'_>) {
         match self.mpdclient.issue_command("pause 1").await {
             Ok(_) => {
                 PlayerInterface::playback_status_changed(self, &ctxt).await.ok();
@@ -46,7 +45,7 @@ impl PlayerInterface {
     }
 
     #[zbus()]
-    async fn play_pause(&self, #[zbus(signal_context)] ctxt: SignalEmitter<'_>) {
+    async fn play_pause(&self, #[zbus(signal_emitter)] ctxt: SignalEmitter<'_>) {
         // Decide with command to use based on the current state
         let command = match self.mpd_state.read().await.playback_state {
             MpdPlaybackState::Stopped => "play",
@@ -68,7 +67,7 @@ impl PlayerInterface {
     }
 
     #[zbus()]
-    async fn previous(&self, #[zbus(signal_context)] ctxt: SignalEmitter<'_>) {
+    async fn previous(&self, #[zbus(signal_emitter)] ctxt: SignalEmitter<'_>) {
         let state = self.mpd_state.read().await;
         let mut cmd = "previous";
         if let MpdPlaybackState::Playing(state) = &state.playback_state {
@@ -97,7 +96,7 @@ impl PlayerInterface {
     }
 
     #[zbus()]
-    async fn seek(&self, #[zbus(signal_context)] ctxt: SignalEmitter<'_>, ms: i64) {
+    async fn seek(&self, #[zbus(signal_emitter)] ctxt: SignalEmitter<'_>, ms: i64) {
         let symbol = if ms > 0 { '+' } else { '-' };
         let t = Duration::from_micros(ms.unsigned_abs());
         let cmd = format!("seekcur {symbol}{}", t.as_secs());
@@ -114,7 +113,7 @@ impl PlayerInterface {
     #[zbus()]
     async fn set_position(
         &self,
-        #[zbus(signal_context)] ctxt: SignalEmitter<'_>,
+        #[zbus(signal_emitter)] ctxt: SignalEmitter<'_>,
         track_id: ObjectPath<'_>,
         position: i64,
     ) {
@@ -180,19 +179,19 @@ impl PlayerInterface {
     }
 
     #[zbus(property)]
-    async fn metadata(&self) -> HashMap<&'static str, Value<'_>> {
+    async fn metadata(&self) -> HashMap<&'static str, Variant<'_>> {
         let state = self.mpd_state.read().await;
         let mut res = HashMap::with_capacity(10);
         if let Some(metadata) = state.current_song.as_ref() {
             to_mpris_metadata(metadata, &mut res);
             if let Some(art) = &state.album_art {
-                res.insert("mpris:artUrl", Value::new(format!("file://{}", art.display())));
+                res.insert("mpris:artUrl", Variant::new(format!("file://{}", art.display())));
             }
         } else if state.playback_state == MpdPlaybackState::Stopped && state.playlistlength > 0 {
             if let Ok(Some(metadata)) = self.mpdclient.get_track(0).await {
                 to_mpris_metadata(&metadata, &mut res);
                 if let Some(art) = &state.album_art {
-                    res.insert("mpris:artUrl", Value::new(format!("file://{}", art.display())));
+                    res.insert("mpris:artUrl", Variant::new(format!("file://{}", art.display())));
                 }
             }
         }

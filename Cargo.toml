@@ -4,18 +4,17 @@ version = "1.1.2"
 edition = "2024"
 authors = ["Leo Shen <i@szclsya.me>"]
 license = "GPL-3.0-or-later"
-rust-version = "1.88.0"
+rust-version = "1.89.0"
 
 [dependencies]
-anyhow = "1"
+anyhow = { version = "1", default-features = false}
 thiserror = "2"
-tokio = { version = "1", default-features = false, features = ["rt", "macros"]}
+tokio = { version = "1", default-features = false, features = ["rt", "macros", "fs", "io-util", "net", "time"]}
 bytes = "1"
 futures = "0.3"
 futures-util = "0.3"
 # Commuicating with D-Bus
-zbus = { version = "5", default-features = false, features = ["tokio"] }
-zvariant = "5"
+zbus = { version = "6", default-features = false, features = ["tokio", "service", "proxy"] }
 # Parsing MPD protocol
 nom = "8"
 # Creating unique album art filenames
@@ -32,12 +31,12 @@ signal-hook = "0.4"
 signal-hook-tokio = { version = "0.4", features = ["futures-v0_3"] }
 # Config
 argh = "0.1"
-dirs = "6"
+dirs = "7"
 console-subscriber = { version = "*", optional = true }
 
 [features]
 # Used alongside tokio-console
-tokio-console = ["dep:console-subscriber"]
+tokio-console = ["dep:console-subscriber", "tokio/tracing"]
 
 [profile.release]
 # Optimize for size. This isn't a performance sensitive app

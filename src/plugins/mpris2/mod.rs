@@ -25,13 +25,13 @@ pub async fn start(mpd_state_server: Arc<MpdStateServer>) -> Result<(Connection,
     let tracklist_interface = TracklistInterface::new(mpd_state_server.clone());
 
     let connection = zbus::connection::Builder::session()
-        .context("Failed to connect to D-Bus session bus. Is $DBUS_SESSION_BUS_ADDRESS set to the correct address?")?
-        .name(BUS_NAME)?
-        .serve_at(OBJECT_PATH, root_interface)?
-        .serve_at(OBJECT_PATH, player_interface)?
-        .serve_at(OBJECT_PATH, tracklist_interface)?
+        .name(BUS_NAME)
+        .serve_at(OBJECT_PATH, root_interface)
+        .serve_at(OBJECT_PATH, player_interface)
+        .serve_at(OBJECT_PATH, tracklist_interface)
         .build()
-        .await?;
+        .await
+        .context("Failed to connect to D-Bus session bus. Is $DBUS_SESSION_BUS_ADDRESS set to the correct address?")?;
 
     let connection2 = connection.clone();
     let client = mpd_state_server.clone();
