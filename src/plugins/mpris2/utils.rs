@@ -25,8 +25,19 @@ pub fn to_mpris_metadata(i: &SongMetadata, buf: &mut HashMap<&str, Variant<'_>>)
     };
     optional_insert("xesam:title", &i.title);
     optional_insert("xesam:album", &i.album);
-    optional_insert("xesam:discNumber", &i.disc);
-    optional_insert("xesam:trackNumber", &i.track);
+
+    // MPD tags are raw ("12/16"); take the leading digits, omit if there are none.
+    let mut optional_insert_leading_int = |tag: &'static str, src: &Option<String>| {
+        if let Some(value) = src {
+            let digits: String =
+                value.trim_start().chars().take_while(|c| c.is_ascii_digit()).collect();
+            if let Ok(n) = digits.parse::<i32>() {
+                buf.insert(tag, Variant::new(n));
+            }
+        }
+    };
+    optional_insert_leading_int("xesam:discNumber", &i.disc);
+    optional_insert_leading_int("xesam:trackNumber", &i.track);
 
     let mut optional_insert_array = |tag: &'static str, src: &Option<String>| {
         if let Some(value) = src {

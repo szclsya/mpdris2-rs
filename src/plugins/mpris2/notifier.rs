@@ -1,5 +1,8 @@
 use super::{OBJECT_PATH, PlayerInterface, TracklistInterface};
-use crate::{mpd::MpdStateServer, types::PlayerStateChange};
+use crate::{
+    mpd::{MpdStateServer, types::MpdPlaybackState},
+    types::PlayerStateChange,
+};
 
 use anyhow::Result;
 use log::trace;
@@ -58,16 +61,24 @@ pub async fn notify_loop(
                                 .iter()
                                 .filter_map(|song| extract_ids_from_metadata(song).ok())
                                 .collect();
-
-                            let current_object_path = if ids.is_empty() {
+                            let state = client.get_status();
+                            let state = state.read().await;
+                            let no_track =
                                 ObjectPath::try_from("/org/mpris/MediaPlayer2/TrackList/NoTrack")
-                                    .unwrap()
-                            } else {
-                                let state = client.get_status();
-                                let state = state.read().await;
-                                let current_pos = state.song.unwrap_or(0);
-                                ids.get(current_pos as usize).unwrap().clone()
-                            };
+                                    .unwrap();
+                            // MPD keeps song/songid set after a stop, so gate on the
+                            // playback state: a stopped player has no current track.
+                            let current_object_path =
+                                if matches!(state.playback_state, MpdPlaybackState::Stopped) {
+                                    no_track
+                                } else {
+                                    // Make sure the id is not stale
+                                    state
+                                        .song
+                                        .and_then(|pos| ids.get(pos as usize))
+                                        .cloned()
+                                        .unwrap_or(no_track)
+                                };
 
                             TracklistInterface::track_list_replaced(
                                 tracklist_ctxt,

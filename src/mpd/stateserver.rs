@@ -123,12 +123,18 @@ impl MpdStateServer {
         for (key, value) in response.fields {
             if key == "file" && !buf.is_empty() {
                 // We've just entered a new song, parse previous buffer to a song metadata
-                let metadata = hashmap_to_song_metadata(&mut buf)?;
-                if let Some(metadata) = metadata {
+                if let Some(metadata) = hashmap_to_song_metadata(&mut buf)? {
                     res.push(metadata);
                 }
             }
-            buf.entry(key.clone()).or_insert_with(|| vec![value.clone()]).push(value.clone());
+            buf.entry(key).or_default().push(value);
+        }
+
+        // Flush the last song, which has no trailing `file` to trigger its parse
+        if !buf.is_empty()
+            && let Some(metadata) = hashmap_to_song_metadata(&mut buf)?
+        {
+            res.push(metadata);
         }
 
         Ok(res)

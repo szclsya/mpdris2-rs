@@ -3,7 +3,7 @@ use super::utils::*;
 use crate::mpd::MpdStateServer;
 
 use anyhow::{Context, format_err};
-use log::{error, warn};
+use log::{debug, error, warn};
 use std::{collections::HashMap, sync::Arc};
 use zbus::{ObjectPath, Variant, interface, object_server::SignalEmitter};
 
@@ -70,13 +70,15 @@ impl TracklistInterface {
         match self.mpdclient.issue_command(&cmd).await {
             Ok(_resp) => {
                 let mut new_metadata = self.get_tracks_metadata(vec![track.clone()]).await?;
-                let new_metadata = new_metadata.remove(0);
-                if !new_metadata.is_empty() {
+                // get_tracks_metadata skips unknown ids, so this may be empty
+                if let Some(new_metadata) = new_metadata.pop()
+                    && !new_metadata.is_empty()
+                {
                     TracklistInterface::track_metadata_changed(&ctxt, track, new_metadata).await?;
                 }
             }
             Err(e) => {
-                error!("org.mpris.MediaPlayer2.TrackList.GoTo failed: {e}");
+                warn!("org.mpris.MediaPlayer2.TrackList.GoTo failed: {e}");
             }
         }
         Ok(())
@@ -153,12 +155,12 @@ pub fn extract_ids_from_metadata<'a>(
     i: &HashMap<&'static str, Variant<'_>>,
 ) -> zbus::fdo::Result<ObjectPath<'a>> {
     let path = i
-        .get("mpris::trackid")
-        .ok_or_else(|| zbus::fdo::Error::Failed("mpris::trackid doesn't exist".to_string()))?;
+        .get("mpris:trackid")
+        .ok_or_else(|| zbus::fdo::Error::Failed("mpris:trackid doesn't exist".to_string()))?;
     if let Variant::ObjectPath(p) = path {
         Ok(p.to_owned())
     } else {
-        Err(zbus::fdo::Error::Failed("mpris::trackid is not ObjectPath".to_string()))
+        Err(zbus::fdo::Error::Failed("mpris:trackid is not ObjectPath".to_string()))
     }
 }
 
