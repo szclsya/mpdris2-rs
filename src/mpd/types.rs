@@ -193,6 +193,19 @@ impl MpdState {
     }
 }
 
+fn get_value(src: &mut HashMap<String, Vec<String>>, key: &str) -> Option<String> {
+    if let Some(mut value) = src.remove(key) {
+        if value.is_empty() {
+            None
+        } else {
+            value.dedup();
+            Some(value.remove(0))
+        }
+    } else {
+        None
+    }
+}
+
 pub fn hashmap_to_song_metadata(
     src: &mut HashMap<String, Vec<String>>,
 ) -> Result<Option<SongMetadata>> {
@@ -215,32 +228,20 @@ pub fn hashmap_to_song_metadata(
         None
     };
 
-    let mut get_value = |key: &str| {
-        if let Some(mut value) = src.remove(key) {
-            if value.is_empty() {
-                None
-            } else {
-                value.dedup();
-                Some(value.remove(0))
-            }
-        } else {
-            None
-        }
-    };
     let res = SongMetadata {
         uri,
         id,
         duration,
-        name: get_value("Name"),
-        title: get_value("Title"),
-        album: get_value("Album"),
-        album_artist: get_value("AlbumArtist"),
-        artist: get_value("Artist"),
-        composer: get_value("Composer"),
-        genre: get_value("Genre"),
-        disc: get_value("Disc"),
-        track: get_value("Track"),
-        comment: get_value("Comment"),
+        name: get_value(src, "Name"),
+        title: get_value(src, "Title"),
+        album: get_value(src, "Album"),
+        album_artist: src.remove("AlbumArtist").unwrap_or_default(),
+        artist: src.remove("Artist").unwrap_or_default(),
+        composer: src.remove("Composer").unwrap_or_default(),
+        genre: src.remove("Genre").unwrap_or_default(),
+        disc: get_value(src, "Disc"),
+        track: get_value(src, "Track"),
+        comment: src.remove("Comment").unwrap_or_default(),
     };
     Ok(Some(res))
 }

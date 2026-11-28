@@ -39,15 +39,16 @@ pub fn to_mpris_metadata(i: &SongMetadata, buf: &mut HashMap<&str, Variant<'_>>)
     optional_insert_leading_int("xesam:discNumber", &i.disc);
     optional_insert_leading_int("xesam:trackNumber", &i.track);
 
-    let mut optional_insert_array = |tag: &'static str, src: &Option<String>| {
-        if let Some(value) = src {
-            buf.insert(tag, Variant::new(vec![value.to_owned()]));
+    let mut optional_insert_array = |tag: &'static str, src: &Vec<String>| {
+        if !src.is_empty() {
+            buf.insert(tag, Variant::new(src.to_owned()));
         }
     };
     optional_insert_array("xesam:composer", &i.composer);
     optional_insert_array("xesam:artist", &i.artist);
     optional_insert_array("xesam:albumArtist", &i.album_artist);
     optional_insert_array("xesam:genre", &i.genre);
+    optional_insert_array("xesam:comment", &i.comment);
 
     // Special types
     buf.insert("mpris:trackid", Variant::new(id_to_object_path(i.id)));

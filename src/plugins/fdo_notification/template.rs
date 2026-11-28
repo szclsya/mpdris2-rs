@@ -51,21 +51,21 @@ pub fn format_notification(state: &MpdState, tmpl: &str, max_seg_len: usize) -> 
         // %album_artist%
         res = res.replace(
             "%album_artist%",
-            &str_clamp(song.album_artist.as_deref().unwrap_or_default(), max_seg_len),
+            &str_clamp(&song.album_artist.join(", "), max_seg_len),
         );
         // %artist%
         res = res.replace(
             "%artist%",
-            &str_clamp(song.artist.as_deref().unwrap_or_default(), max_seg_len),
+            &str_clamp(&song.artist.join(", "), max_seg_len),
         );
         // %composer%
         res = res.replace(
             "%composer%",
-            &str_clamp(song.composer.as_deref().unwrap_or_default(), max_seg_len),
+            &str_clamp(&song.composer.join(", "), max_seg_len),
         );
         // %genre%
         res = res
-            .replace("%genre%", &str_clamp(song.genre.as_deref().unwrap_or_default(), max_seg_len));
+            .replace("%genre%", &str_clamp(&song.genre.join(", "), max_seg_len));
         // %disc%
         res = res
             .replace("%disc%", &str_clamp(song.disc.as_deref().unwrap_or_default(), max_seg_len));
@@ -75,7 +75,7 @@ pub fn format_notification(state: &MpdState, tmpl: &str, max_seg_len: usize) -> 
         // %comment%
         res = res.replace(
             "%comment%",
-            &str_clamp(song.comment.as_deref().unwrap_or_default(), max_seg_len),
+            &str_clamp(&song.comment.join(", "), max_seg_len),
         );
         res = res.replace("%empty%", "");
     } else {

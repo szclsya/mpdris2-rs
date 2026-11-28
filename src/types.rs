@@ -28,13 +28,13 @@ pub struct SongMetadata {
     pub name: Option<String>,
     pub title: Option<String>,
     pub album: Option<String>,
-    pub album_artist: Option<String>,
-    pub artist: Option<String>,
-    pub composer: Option<String>,
-    pub genre: Option<String>,
+    pub album_artist: Vec<String>,
+    pub artist: Vec<String>,
+    pub composer: Vec<String>,
+    pub genre: Vec<String>,
     pub disc: Option<String>,
     pub track: Option<String>,
-    pub comment: Option<String>,
+    pub comment: Vec<String>,
 }
 
 impl SongMetadata {
