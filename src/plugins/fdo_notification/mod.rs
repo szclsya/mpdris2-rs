@@ -57,8 +57,9 @@ struct LastNotification {
 
 impl LastNotification {
     pub fn new() -> Self {
-        // This is to make sure a notification get sent when notificaiton service starts
-        let time = Instant::now().checked_sub(Duration::from_secs(60)).unwrap();
+        // A time 60s in the past, so the first notification passes the rate-limit
+        // gate. Falls back to now if we're within 60s of boot (checked_sub underflows).
+        let time = Instant::now().checked_sub(Duration::from_secs(60)).unwrap_or_else(Instant::now);
         LastNotification {
             id: 0,
             summary: String::new(),

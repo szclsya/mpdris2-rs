@@ -1,8 +1,9 @@
 /// A simple MPD client implementation
+use super::parser::MpdError;
 use super::{parse_error_line, parse_line, types::MpdResponse};
 use crate::types::MpdConnectionConfig;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use bytes::{Bytes, BytesMut};
 use log::{debug, error, info, trace};
 use std::sync::Arc;
@@ -11,6 +12,9 @@ use tokio::{
     net::{TcpStream, UnixStream, tcp, unix},
     time::sleep,
 };
+
+// Increase binary size limit a bit, so less roundtrips, but not too much that increases memory usage
+const BINARY_LIMIT: &str = "binarylimit 262144";
 
 enum MpdConnection {
     Tcp((BufReader<tcp::OwnedReadHalf>, BufWriter<tcp::OwnedWriteHalf>)),
@@ -52,7 +56,7 @@ impl MpdConnection {
                 }
                 #[cfg(not(target_os = "linux"))]
                 {
-                    bail!("Abstract sockets are only supported on Linux");
+                    return Err(anyhow::anyhow!("Abstract sockets are only supported on Linux"));
                 }
             }
         };
@@ -104,7 +108,7 @@ impl MpdClient {
         let mut hello = String::new();
         res.connection.read_line(&mut hello).await?;
         // Increase binary chunk size
-        res.issue_command("binarylimit 131072").await?;
+        res.command(BINARY_LIMIT).await?;
 
         Ok(res)
     }
@@ -116,7 +120,7 @@ impl MpdClient {
         new_connection.read_line(&mut hello).await?;
         self.connection = new_connection;
         // Increase binary chunk size
-        self.issue_command("binarylimit 524288").await?;
+        self.command(BINARY_LIMIT).await?;
         Ok(())
     }
 
@@ -146,19 +150,19 @@ impl MpdClient {
 
     /// Issue command to MPD server and wait for response.
     /// Returns when response has been received and parsed.
-    pub async fn issue_command(&mut self, cmd: &str) -> Result<MpdResponse> {
+    pub async fn command(&mut self, cmd: &str) -> Result<MpdResponse, MpdError> {
         trace!("--> {cmd}");
         let mut real_cmd = cmd.to_owned();
         real_cmd.push('\n');
 
         self.connection.write_all(real_cmd.as_bytes()).await?;
 
-        let resp = self.read_response().await?;
+        let resp = self.recv().await?;
         trace!("<-- {cmd}");
         Ok(resp)
     }
 
-    async fn read_response(&mut self) -> Result<MpdResponse> {
+    async fn recv(&mut self) -> Result<MpdResponse, MpdError> {
         let mut fields: Vec<(String, String)> = Vec::new();
         let mut binary: Option<Bytes> = None;
 
@@ -169,9 +173,8 @@ impl MpdClient {
                 // Response ends here
                 break;
             } else if buf.starts_with("ACK") {
-                // We encountered an error
-                let e = parse_error_line(&buf)?;
-                return Err(anyhow::Error::from(e));
+                // MPD error, but the MPD connection is still healthy
+                return Err(MpdError::Command(parse_error_line(&buf)?));
             }
 
             // It's a normal line. Parse it.
@@ -180,7 +183,9 @@ impl MpdClient {
 
             if name == "binary" {
                 // We are receiving a binary chunk
-                let len: u64 = value.parse()?;
+                // All errors here will need a reconnect since unknown binary section size leads to desync
+                let len: u64 =
+                    value.parse::<u64>().map_err(|e| MpdError::Connection(e.to_string()))?;
                 let mut res = BytesMut::zeroed(len as usize);
                 self.connection.read_exact(res.as_mut()).await?;
                 binary = Some(res.into());
@@ -191,7 +196,9 @@ impl MpdClient {
                 let mut buf = String::new();
                 self.connection.read_line(&mut buf).await?;
                 if !buf.starts_with("OK") {
-                    bail!("Expecting OK after binary chunk, got {}", buf);
+                    return Err(MpdError::Connection(format!(
+                        "Expecting OK after binary chunk, got {buf}"
+                    )));
                 }
                 break;
             }

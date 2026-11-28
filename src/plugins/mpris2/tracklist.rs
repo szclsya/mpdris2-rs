@@ -3,7 +3,7 @@ use super::utils::*;
 use crate::mpd::MpdStateServer;
 
 use anyhow::{Context, format_err};
-use log::{debug, error, warn};
+use log::{error, warn};
 use std::{collections::HashMap, sync::Arc};
 use zbus::{ObjectPath, Variant, interface, object_server::SignalEmitter};
 

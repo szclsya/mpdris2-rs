@@ -1,3 +1,4 @@
+use super::parser::MpdError;
 use super::{
     MpdClient,
     albumart::*,
@@ -59,7 +60,7 @@ impl MpdStateServer {
         let _ping_task = spawn(async move {
             loop {
                 let mut client = qc2.lock().await;
-                if let Err(e) = client.issue_command("ping").await {
+                if let Err(e) = client.command("ping").await {
                     error!("ping failed: {e}");
                     client.reconnect_until_success().await;
                 }
@@ -97,7 +98,7 @@ impl MpdStateServer {
     }
 
     pub async fn update_status(&self) -> Result<()> {
-        let new_status = self.query_client.lock().await.issue_command("status").await?.field_map();
+        let new_status = self.query_client.lock().await.command("status").await?.field_map();
         let _diffs = self.state.mpdstate.write().await.update_status(new_status)?;
         Ok(())
     }
@@ -142,13 +143,17 @@ impl MpdStateServer {
 
     pub async fn issue_command(&self, cmd: &str) -> Result<types::MpdResponse> {
         let mut client = self.query_client.lock().await;
-        let resp = client.issue_command(cmd).await;
-        match resp {
+        match client.command(cmd).await {
             Ok(resp) => Ok(resp),
-            Err(e) => {
-                error!("Error executing command: {e}");
+            Err(err @ MpdError::Command(_)) => {
+                error!("Error executing command: {err}");
+                Err(err.into())
+            }
+            Err(MpdError::Connection(e)) => {
+                // Connection broken, reconnect
+                error!("MPD connection error: {e}");
                 client.reconnect_until_success().await;
-                client.issue_command(cmd).await
+                client.command(cmd).await.map_err(Into::into)
             }
         }
     }
@@ -179,7 +184,7 @@ async fn idle(
     tx: &Sender<Vec<PlayerStateChange>>,
 ) -> Result<()> {
     trace!("Entering idle...");
-    let res = c.issue_command(IDLE_CMD).await?;
+    let res = c.command(IDLE_CMD).await?;
 
     let mut subsystems: Vec<&str> = Vec::new();
     for field in &res.fields {
@@ -202,8 +207,8 @@ async fn full_update_status(
     subsystems: &[&str],
 ) -> Result<()> {
     let mut c = query_client.lock().await;
-    let new_status = c.issue_command("status").await?.field_map();
-    let new_metadata_map = c.issue_command("currentsong").await?.field_map();
+    let new_status = c.command("status").await?.field_map();
+    let new_metadata_map = c.command("currentsong").await?.field_map();
     drop(c);
 
     let mut mpdstate = state.mpdstate.write().await;
@@ -220,7 +225,16 @@ async fn full_update_status(
         diffs.push(PlayerStateChange::Metadata);
         if icy_stream {
             debug!("Looks like this is an icecast stream");
-            repeated_update_album_art(query_client.clone(), state.clone(), 3, tx.clone()).await;
+            if let Some(prev) = state.album_art_updating.write().await.take() {
+                prev.abort();
+            }
+            let handle = spawn(repeated_update_album_art(
+                query_client.clone(),
+                state.clone(),
+                3,
+                tx.clone(),
+            ));
+            *state.album_art_updating.write().await = Some(handle);
         } else {
             update_album_art(query_client.clone(), state.clone()).await?;
         }

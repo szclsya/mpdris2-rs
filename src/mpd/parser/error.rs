@@ -8,7 +8,7 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 #[error("MPD error {code}: {msg}")]
-pub struct MpdError {
+pub struct AckError {
     // We just return the code rather than replicate the enum here
     // See <https://github.com/MusicPlayerDaemon/MPD/blob/master/src/protocol/Ack.hxx>
     pub code: usize,
@@ -18,7 +18,28 @@ pub struct MpdError {
     current_command: String,
 }
 
-pub fn parse_error_line(i: &str) -> Result<MpdError> {
+#[derive(Error, Debug)]
+pub enum MpdError {
+    #[error(transparent)]
+    Command(#[from] AckError),
+    #[error("MPD connection error: {0}")]
+    Connection(String),
+}
+
+// By default errors are connection errors, so we don't need to declare an error type on each I/O command
+impl From<std::io::Error> for MpdError {
+    fn from(e: std::io::Error) -> Self {
+        Self::Connection(e.to_string())
+    }
+}
+
+impl From<anyhow::Error> for MpdError {
+    fn from(e: anyhow::Error) -> Self {
+        Self::Connection(e.to_string())
+    }
+}
+
+pub fn parse_error_line(i: &str) -> Result<AckError> {
     let res = match parse_error_line_helper(i) {
         Ok(res) => res,
         Err(e) => match e {
@@ -32,7 +53,7 @@ pub fn parse_error_line(i: &str) -> Result<MpdError> {
     };
 
     let (_, (error_id, command_no, current_command, msg)) = res;
-    let res = MpdError {
+    let res = AckError {
         code: error_id.parse()?,
         msg: msg.trim().to_owned(),
         command_list_no: command_no.parse()?,

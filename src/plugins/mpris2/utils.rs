@@ -53,7 +53,7 @@ pub fn to_mpris_metadata(i: &SongMetadata, buf: &mut HashMap<&str, Variant<'_>>)
     buf.insert("mpris:trackid", Variant::new(id_to_object_path(i.id)));
     buf.insert("xesam:url", Variant::new(i.uri.clone()));
     if let Some(value) = i.duration {
-        buf.insert("mpris:length", Variant::new(value.as_micros() as u64));
+        buf.insert("mpris:length", Variant::new(value.as_micros() as i64));
     }
     // Use filename as title if no title is declared
     if i.title.is_none() {

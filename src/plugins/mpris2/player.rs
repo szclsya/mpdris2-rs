@@ -95,15 +95,14 @@ impl PlayerInterface {
     }
 
     #[zbus()]
-    async fn seek(&self, #[zbus(signal_emitter)] ctxt: SignalEmitter<'_>, ms: i64) {
+    async fn seek(&self, ms: i64) {
         let symbol = if ms > 0 { '+' } else { '-' };
         let t = Duration::from_micros(ms.unsigned_abs());
         let cmd = format!("seekcur {symbol}{}", t.as_secs());
         if let Err(e) = self.mpdclient.issue_command(&cmd).await {
             error!("org.mpris.MediaPlayer2.Player.Seek failed: {e}");
-        } else {
-            PlayerInterface::seeked(&ctxt, ms).await.ok();
         }
+        // Don't emit signal. The notifier will do it for us
     }
 
     #[zbus(signal)]
@@ -132,7 +131,7 @@ impl PlayerInterface {
 
     #[zbus()]
     async fn open_uri(&self, uri: &str) {
-        let cmd = format!("add {uri}");
+        let cmd = format!("add \"{uri}\"");
         self.mpdclient.issue_command(&cmd).await.ok();
     }
 
@@ -200,7 +199,7 @@ impl PlayerInterface {
 
     #[zbus(property)]
     async fn volume(&self) -> f64 {
-        if let Some(vol) = self.mpd_state.read().await.volume { vol as f64 / 100.0 } else { 100.0 }
+        if let Some(vol) = self.mpd_state.read().await.volume { vol as f64 / 100.0 } else { 1.0 }
     }
 
     #[zbus(property)]

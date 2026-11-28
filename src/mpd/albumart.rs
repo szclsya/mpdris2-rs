@@ -88,11 +88,6 @@ pub async fn repeated_update_album_art(
     retry: u8,
     tx: Sender<Vec<PlayerStateChange>>,
 ) {
-    // Check current state
-    if let Some(token) = state.album_art_updating.read().await.as_ref() {
-        token.abort();
-    }
-
     let retrieve_interval = 1000;
     let mut last_pic_hash = None;
     let mut i = 1;
@@ -132,7 +127,6 @@ pub async fn repeated_update_album_art(
         }
     }
 
-    *state.album_art_updating.write().await = None;
     trace!("Repeated album art update done.");
 }
 
@@ -161,7 +155,7 @@ async fn mpd_binary_to_file(
     uri: &str,
     path: &PathBuf,
 ) -> Result<Option<u64>> {
-    let resp = c.issue_command(&format!("{cmd} \"{uri}\" 0")).await?;
+    let resp = c.command(&format!("{cmd} \"{uri}\" 0")).await?;
     let fields = resp.field_map();
     let mut offset: u64 = 0;
     if fields.contains_key("binary") {
@@ -169,18 +163,27 @@ async fn mpd_binary_to_file(
         let size = &fields.get("size").ok_or_else(|| format_err!("bad mpd response: no size"))?[0];
         let binary_size = &fields.get("binary").unwrap()[0];
         let mut pic_file = prepare_album_art_file(path).await?;
-        pic_file.write_all(&resp.binary.unwrap()).await?;
+        let bytes = resp.binary.unwrap();
+        pic_file.write_all(&bytes).await?;
+        hasher.write(&bytes);
         if size != binary_size {
             offset += binary_size.parse::<u64>()?;
             loop {
                 // Read the remaining parts
                 let cmd = format!("{cmd} \"{uri}\" {offset}");
-                let resp = c.issue_command(&cmd).await?;
+                let resp = c.command(&cmd).await?;
+                // size/binary must come from THIS response, not the first one
+                let fields = resp.field_map();
                 let size: u64 =
                     fields.get("size").ok_or_else(|| format_err!("bad mpd response: no size"))?[0]
                         .parse()?;
-                let binary_size: u64 = fields.get("binary").unwrap()[0].parse()?;
-                let bytes = resp.binary.unwrap();
+                let binary_size: u64 = fields
+                    .get("binary")
+                    .ok_or_else(|| format_err!("bad mpd response: no binary"))?[0]
+                    .parse()?;
+                let Some(bytes) = resp.binary else {
+                    return Err(format_err!("bad mpd response: binary field without payload"));
+                };
                 pic_file.write_all(&bytes).await?;
                 hasher.write(&bytes);
                 if binary_size + offset >= size {
