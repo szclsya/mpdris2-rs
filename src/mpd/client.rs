@@ -1,5 +1,4 @@
 /// A simple MPD client implementation
-use super::parser::MpdError;
 use super::{parse_error_line, parse_line, types::MpdResponse};
 use crate::types::MpdConnectionConfig;
 
@@ -7,6 +6,7 @@ use anyhow::{Context, Result};
 use bytes::{Bytes, BytesMut};
 use log::{debug, error, info, trace};
 use std::sync::Arc;
+use thiserror::Error;
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
     net::{TcpStream, UnixStream, tcp, unix},
@@ -15,6 +15,27 @@ use tokio::{
 
 // Increase binary size limit a bit, so less roundtrips, but not too much that increases memory usage
 const BINARY_LIMIT: &str = "binarylimit 262144";
+
+#[derive(Error, Debug)]
+pub enum MpdError {
+    #[error(transparent)]
+    Command(#[from] super::parser::AckError),
+    #[error("MPD connection error: {0}")]
+    Connection(String),
+}
+
+// By default errors are connection errors, so we don't need to declare an error type on each I/O command
+impl From<std::io::Error> for MpdError {
+    fn from(e: std::io::Error) -> Self {
+        Self::Connection(e.to_string())
+    }
+}
+
+impl From<anyhow::Error> for MpdError {
+    fn from(e: anyhow::Error) -> Self {
+        Self::Connection(e.to_string())
+    }
+}
 
 enum MpdConnection {
     Tcp((BufReader<tcp::OwnedReadHalf>, BufWriter<tcp::OwnedWriteHalf>)),

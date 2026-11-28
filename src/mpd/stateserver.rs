@@ -1,4 +1,4 @@
-use super::parser::MpdError;
+use super::client::MpdError;
 use super::{
     MpdClient,
     albumart::*,

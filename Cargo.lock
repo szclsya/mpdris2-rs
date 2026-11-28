@@ -740,7 +740,6 @@ dependencies = [
  "futures-util",
  "humantime",
  "log",
- "nom",
  "signal-hook",
  "signal-hook-tokio",
  "thiserror",

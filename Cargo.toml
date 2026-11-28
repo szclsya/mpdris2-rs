@@ -15,8 +15,6 @@ futures = "0.3"
 futures-util = "0.3"
 # Commuicating with D-Bus
 zbus = { version = "6", default-features = false, features = ["tokio", "service", "proxy"] }
-# Parsing MPD protocol
-nom = "8"
 # Creating unique album art filenames
 twox-hash = "2"
 base32 = "0.5"
