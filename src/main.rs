@@ -8,9 +8,8 @@ const RETRY_INTERVAL: Duration = Duration::from_secs(5);
 
 use anyhow::Result;
 use colored::Colorize;
-use fern::colors::{Color, ColoredLevelConfig};
 use futures_util::stream::StreamExt;
-use log::{debug, error, info};
+use log::{Level, LevelFilter, Metadata, Record, debug, error, info};
 use signal_hook::consts::signal::{SIGINT, SIGQUIT, SIGTERM};
 use signal_hook_tokio::Signals;
 use std::{path::PathBuf, sync::Arc, time::Duration};
@@ -32,9 +31,9 @@ fn main() {
         }
     };
     if let Err(err) = rt.block_on(try_main()) {
-        println!("{:>6} {err}", "ERROR".red());
+        eprintln!("{:>6} {err}", "ERROR".red());
         err.chain().skip(1).for_each(|cause| {
-            println!("{} {}", "DUE TO".yellow(), cause);
+            eprintln!("{} {}", "DUE TO".yellow(), cause);
         });
     }
 }
@@ -42,13 +41,13 @@ fn main() {
 async fn try_main() -> Result<()> {
     let args: config::Args = argh::from_env();
     let level = if args.trace {
-        2
+        LevelFilter::Trace
     } else if args.verbose {
-        1
+        LevelFilter::Debug
     } else {
-        0
+        LevelFilter::Info
     };
-    setup_logger(level)?;
+    log::set_boxed_logger(Box::new(SimpleLogger(level))).map(|()| log::set_max_level(level))?;
 
     // Configure how to connect to MPD
     let connection_config = match &args.host {
@@ -116,28 +115,32 @@ async fn try_main() -> Result<()> {
     Ok(())
 }
 
-fn setup_logger(debug: u8) -> Result<()> {
-    let colors = ColoredLevelConfig::new().error(Color::Red).warn(Color::Yellow).info(Color::Blue);
+struct SimpleLogger(LevelFilter);
 
-    let level = match debug {
-        1 => log::LevelFilter::Debug,
-        2 => log::LevelFilter::Trace,
-        _ => log::LevelFilter::Info,
-    };
+impl log::Log for SimpleLogger {
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        metadata.level() <= self.0
+    }
 
-    fern::Dispatch::new()
-        .format(move |out, message, record| {
-            out.finish(format_args!(
-                "{:>5} [{}] {}",
-                colors.color(record.level()),
-                record.target(),
-                message
-            ));
-        })
-        .level(level)
-        .chain(std::io::stdout())
-        .apply()?;
-    Ok(())
+    fn log(&self, record: &Record) {
+        if !self.enabled(record.metadata()) {
+            return;
+        }
+        let level = match record.level() {
+            Level::Error => "ERROR".red(),
+            Level::Warn => "WARN".yellow(),
+            Level::Info => "INFO".blue(),
+            Level::Debug => "DEBUG".cyan(),
+            Level::Trace => "TRACE".white(),
+        };
+        let dest: &mut dyn std::io::Write = match record.level() {
+            Level::Error => &mut std::io::stderr().lock(),
+            _ => &mut std::io::stdout().lock(),
+        };
+        let _ = writeln!(dest, "{:>5} [{}] {}", level, record.target(), record.args());
+    }
+
+    fn flush(&self) {}
 }
 
 fn parse_host_string(s: &str) -> MpdConnectionConfig {
